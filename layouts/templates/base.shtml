@@ -87,6 +87,42 @@
 				var el = document.getElementById("quip");
 				if (el) el.textContent = quips[Math.floor(Math.random() * quips.length)];
 
+				// Copy button for code blocks.
+				document.querySelectorAll("pre > code").forEach(function (codeEl) {
+					var pre = codeEl.parentElement;
+					var btn = document.createElement("button");
+					btn.type = "button";
+					btn.className = "copy-btn";
+					btn.textContent = "copy";
+					btn.setAttribute("aria-label", "Copy code to clipboard");
+					btn.addEventListener("click", function () {
+						var text = codeEl.textContent;
+						var done = function () {
+							btn.textContent = "copied!";
+							btn.classList.add("copied");
+							clearTimeout(btn._resetTimer);
+							btn._resetTimer = setTimeout(function () {
+								btn.textContent = "copy";
+								btn.classList.remove("copied");
+							}, 1600);
+						};
+						if (navigator.clipboard && navigator.clipboard.writeText) {
+							navigator.clipboard.writeText(text).then(done, done);
+						} else {
+							var ta = document.createElement("textarea");
+							ta.value = text;
+							ta.style.position = "fixed";
+							ta.style.opacity = "0";
+							document.body.appendChild(ta);
+							ta.select();
+							try { document.execCommand("copy"); } catch (err) {}
+							document.body.removeChild(ta);
+							done();
+						}
+					});
+					pre.appendChild(btn);
+				});
+
 				// Light/dark theme toggle, persisted to localStorage.
 				var toggle = document.getElementById("theme-toggle");
 				function currentTheme() {
@@ -281,43 +317,8 @@
 							}
 						}, 40);
 					}
-
-					// A few spark bursts land near the header shortly after load.
-					var header = document.querySelector("header");
-					if (header) {
-						var hRect = header.getBoundingClientRect();
-						var burstSpots = [0.15, 0.5, 0.85];
-						burstSpots.forEach(function (frac, i) {
-							setTimeout(function () {
-								spawnSparks(
-									hRect.left + hRect.width * frac,
-									hRect.top + hRect.height * 0.6,
-									7 + Math.floor(Math.random() * 5)
-								);
-							}, 150 + i * 160);
-						});
-					}
 				}
 
-				// Type "perf" anywhere on the page for a little fireworks show.
-				var buffer = "";
-				document.addEventListener("keydown", function (e) {
-					if (!e.key || e.key.length !== 1) return;
-					buffer = (buffer + e.key.toLowerCase()).slice(-4);
-					if (buffer === "perf") {
-						buffer = "";
-						var toast = document.createElement("div");
-						toast.className = "toast";
-						toast.textContent = "\uD83C\uDFC6 Achievement unlocked: ran perf";
-						document.body.appendChild(toast);
-						setTimeout(function () {
-							toast.remove();
-						}, 2700);
-						for (var i = 0; i < 5; i++) {
-							spawnSparks(Math.random() * window.innerWidth, Math.random() * window.innerHeight, 10);
-						}
-					}
-				});
 			})();
 		</script>
 	</body>

@@ -441,13 +441,56 @@ pre code {
 pre code[class]::before {
   content: attr(class);
   position: absolute;
-  top: 0.7rem;
+  bottom: 0.7rem;
   right: 0.9rem;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fg-faint);
+}
+
+/* -------------------- Copy button -------------------- */
+
+.copy-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.7rem;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25em 0.6em;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+pre:hover .copy-btn,
+pre:focus-within .copy-btn,
+.copy-btn:focus-visible,
+.copy-btn.copied {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.copy-btn:active {
+  transform: scale(0.94);
+}
+
+.copy-btn.copied {
+  color: var(--ctp-green);
+  border-color: var(--ctp-green);
 }
 
 /* -------------------- Quotes & figures -------------------- */
@@ -879,37 +922,6 @@ footer a:hover {
   }
 
   .progress-bar.boot {
-    animation: none;
-  }
-}
-
-/* -------------------- Achievement toast -------------------- */
-
-.toast {
-  position: fixed;
-  bottom: 1.5rem;
-  left: 50%;
-  z-index: 9999;
-  background-color: var(--bg-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6em 1.1em;
-  font-family: var(--mono);
-  font-size: 0.85rem;
-  color: var(--fg);
-  white-space: nowrap;
-  animation: toast-pop 2.6s ease forwards;
-}
-
-@keyframes toast-pop {
-  0%   { opacity: 0; transform: translate(-50%, 16px) scale(0.92); }
-  10%  { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  85%  { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.96); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .toast {
     animation: none;
   }
 }
