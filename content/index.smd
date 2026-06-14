@@ -10,10 +10,4 @@
 
 This blog isn't really about fast code, it's about how we got there.  
 
-SWAR tricks, bit-twiddling, branch-killing, cache-friendly layouts, the interesting part is rarely
-the final benchmark or the code itself.  
-It's the wrong turns, dead ends, small intuitions, and 
-
-_"wait, why does THIS make it faster"_
-
-moments along the way.
+SWAR tricks, bit-twiddling, branch-killing, cache-friendly layouts — the interesting part is rarely the final benchmark or the code itself. It's the wrong turns, dead ends, small intuitions, and the _"wait, why does THIS make it faster"_ moments along the way.

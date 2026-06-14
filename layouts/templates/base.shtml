@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 	<head id="head">
 		<meta charset="utf-8">
 		<meta name="viewport" content="initial-scale=1">
@@ -49,14 +49,21 @@
 		</header>
 		<super>
 		<footer>
-			<span :text="$site.title"></span>
-			<a href="/blog/index.xml">RSS</a>
-			<span class="build-flags" id="quip"></span>
-			<span class="cycle-counter"><span class="led"></span>cycles burned: <span id="cycle-count">0</span></span>
+			<div class="footer-row">
+				<span :text="$site.title"></span>
+				<a href="/blog/index.xml">RSS</a>
+			</div>
+			<div class="footer-row">
+				<span class="build-flags" id="quip"></span>
+				<span class="cycle-counter" aria-hidden="true" title="not a real metric — just a little odometer that ticks up while this tab is open. click for a boost.">
+					<span class="led"></span>cycles burned: <span id="cycle-count">0</span>
+				</span>
+			</div>
 		</footer>
 		<script>
 			(function () {
 				var THEME_COLORS = { light: "#eff1f5", dark: "#24273a" };
+				var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 				var quips = [
 					"-O3 -march=native",
@@ -128,11 +135,14 @@
 
 				// "Cycles burned" odometer. Pauses when the tab isn't visible.
 				var cycleEl = document.getElementById("cycle-count");
+				var cycleCounter = document.querySelector(".cycle-counter");
 				if (cycleEl) {
-					var count = Math.floor(1e9 + Math.random() * 8e9);
+					var targetCount = Math.floor(1e9 + Math.random() * 8e9);
+					var count = 0;
 					var timer = null;
+					var boost = 1;
 					var tick = function () {
-						count += Math.floor(2200000 + Math.random() * 900000);
+						count += Math.floor((2200000 + Math.random() * 900000) * boost);
 						cycleEl.textContent = count.toLocaleString("en-US");
 					};
 					var start = function () {
@@ -147,15 +157,48 @@
 							timer = null;
 						}
 					};
-					if (!document.hidden) start();
 					document.addEventListener("visibilitychange", function () {
 						if (document.hidden) stop(); else start();
 					});
+
+					// On load: rev up from 0 to the starting value, then idle
+					// normally. One-shot — doesn't repeat while reading.
+					if (!reducedMotion) {
+						if (cycleCounter) cycleCounter.classList.add("overclock");
+						var step = Math.ceil(targetCount / 24);
+						var bootTimer = setInterval(function () {
+							count += step;
+							if (count >= targetCount) {
+								count = targetCount;
+								clearInterval(bootTimer);
+								if (cycleCounter) cycleCounter.classList.remove("overclock");
+								if (!document.hidden) start();
+							}
+							cycleEl.textContent = count.toLocaleString("en-US");
+						}, 35);
+					} else {
+						count = targetCount;
+						cycleEl.textContent = count.toLocaleString("en-US");
+						if (!document.hidden) start();
+					}
+
+					// Click the counter for a brief, purely cosmetic overclock.
+					if (cycleCounter) {
+						var overclockTimer = null;
+						cycleCounter.addEventListener("click", function () {
+							boost = 16;
+							cycleCounter.classList.add("overclock");
+							clearTimeout(overclockTimer);
+							overclockTimer = setTimeout(function () {
+								boost = 1;
+								cycleCounter.classList.remove("overclock");
+							}, 2200);
+						});
+					}
 				}
 
 				// Click sparks + "type perf" easter egg. Sparks are skipped if the
 				// user prefers reduced motion; the achievement toast still shows.
-				var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 				var sparkColors = [
 					"--ctp-red", "--ctp-peach", "--ctp-yellow", "--ctp-green",
 					"--ctp-teal", "--ctp-blue", "--ctp-mauve", "--ctp-pink", "--ctp-sapphire"
@@ -184,6 +227,77 @@
 				document.addEventListener("click", function (e) {
 					spawnSparks(e.clientX, e.clientY, 6 + Math.floor(Math.random() * 4));
 				});
+
+				// Hovering over interactive bits gets a tiny (quieter) spark too,
+				// so feedback isn't limited to clicks.
+				document.addEventListener("pointerover", function (e) {
+					var t = e.target.closest && e.target.closest(
+						"nav a, .theme-toggle, .post-entry .title, footer a, " +
+						"[class^='tag-'], .cycle-counter"
+					);
+					if (!t || (e.relatedTarget && t.contains(e.relatedTarget))) return;
+					var rect = t.getBoundingClientRect();
+					spawnSparks(rect.left + rect.width / 2, rect.top + rect.height / 2, 2);
+				});
+
+				// ---- Page-open intro. Runs once, settles within ~1s, then
+				// the page goes quiet — no ongoing ambient effects while
+				// someone is actually reading.
+				if (!reducedMotion) {
+					// Progress bar does a quick full sweep, then settles back
+					// to wherever the actual scroll position is.
+					if (progressBar) {
+						progressBar.classList.add("boot");
+						progressBar.addEventListener("animationend", function handler() {
+							progressBar.classList.remove("boot");
+							progressBar.style.opacity = "";
+							updateProgress();
+							progressBar.removeEventListener("animationend", handler);
+						});
+					}
+
+					// Title "decrypts" from glitch characters into its real text.
+					var titleLink = document.querySelector(".site-title a");
+					if (titleLink) {
+						var finalTitle = titleLink.textContent;
+						var glitchChars = "01<>{}#/_!@$%&*^~".split("");
+						var frame = 0;
+						var totalFrames = 14;
+						var decryptTimer = setInterval(function () {
+							frame++;
+							var revealed = Math.floor((frame / totalFrames) * finalTitle.length);
+							var out = "";
+							for (var i = 0; i < finalTitle.length; i++) {
+								if (i < revealed || finalTitle[i] === " ") {
+									out += finalTitle[i];
+								} else {
+									out += glitchChars[Math.floor(Math.random() * glitchChars.length)];
+								}
+							}
+							titleLink.textContent = out;
+							if (frame >= totalFrames) {
+								clearInterval(decryptTimer);
+								titleLink.textContent = finalTitle;
+							}
+						}, 40);
+					}
+
+					// A few spark bursts land near the header shortly after load.
+					var header = document.querySelector("header");
+					if (header) {
+						var hRect = header.getBoundingClientRect();
+						var burstSpots = [0.15, 0.5, 0.85];
+						burstSpots.forEach(function (frac, i) {
+							setTimeout(function () {
+								spawnSparks(
+									hRect.left + hRect.width * frac,
+									hRect.top + hRect.height * 0.6,
+									7 + Math.floor(Math.random() * 5)
+								);
+							}, 150 + i * 160);
+						});
+					}
+				}
 
 				// Type "perf" anywhere on the page for a little fireworks show.
 				var buffer = "";
