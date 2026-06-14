@@ -1,0 +1,97 @@
+/* Syntax highlighting on the Catppuccin Macchiato palette.
+   Zine emits semantic token classes (keyword, string, type, ...) scoped
+   under a per-language class on <code>, e.g. code.zig, code.c, code.rust.
+   Kept deliberately restrained: most tokens read in muted text, with
+   colour reserved for the handful of categories that aid scanning. */
+
+code .comment,
+code .comment.line,
+code .comment.block {
+  color: var(--ctp-overlay1, #8087a2);
+  font-style: italic;
+}
+
+code .keyword,
+code .keyword.control,
+code .keyword.storage,
+code .operator.word {
+  color: var(--ctp-mauve, #c6a0f6);
+}
+
+code .type,
+code .type.builtin,
+code .constructor {
+  color: var(--ctp-sapphire, #7dc4e4);
+}
+
+code .string,
+code .string.special,
+code .character {
+  color: var(--ctp-green, #a6da95);
+}
+
+code .numeric,
+code .numeric.constant,
+code .number,
+code .constant,
+code .constant.builtin,
+code .boolean {
+  color: var(--ctp-peach, #f5a97f);
+}
+
+code .function,
+code .function.call,
+code .function.method {
+  color: var(--ctp-blue, #8aadf4);
+}
+
+code .variable,
+code .variable.parameter,
+code .property,
+code .field {
+  color: var(--ctp-text, #cad3f5);
+}
+
+code .attribute,
+code .label,
+code .tag {
+  color: var(--ctp-sapphire, #7dc4e4);
+}
+
+code .punctuation,
+code .punctuation.bracket,
+code .punctuation.delimiter,
+code .operator {
+  color: var(--ctp-overlay2, #939ab7);
+}
+
+code .escape {
+  color: var(--ctp-rosewater, #f4dbd6);
+}
+
+code .module,
+code .namespace {
+  color: var(--ctp-teal, #8bd5ca);
+}
+
+/* ziggy front-matter highlighting */
+code.ziggy {
+  color: var(--ctp-teal, #8bd5ca);
+}
+
+code.ziggy .keyword,
+code.ziggy .type {
+  color: var(--ctp-mauve, #c6a0f6);
+}
+
+code.ziggy .string {
+  color: var(--ctp-green, #a6da95);
+}
+
+code.ziggy .numeric.constant {
+  color: var(--ctp-peach, #f5a97f);
+}
+
+code.ziggy .function {
+  color: var(--ctp-blue, #8aadf4);
+}

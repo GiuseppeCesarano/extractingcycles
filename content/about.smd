@@ -1,0 +1,22 @@
+---
+.title = "About",
+.date = @date("2026-01-01T00:00:00"),
+.author = "Sample Author",
+.layout = "page.shtml",
+.draft = false,
+---
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
+tempor incididunt ut labore et dolore magna aliqua. A short paragraph about
+who you are, what you work on, and what kind of performance problems you
+enjoy poking at usually goes here.
+
+Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
+aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
+voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+
+## Elsewhere
+
+- [Lorem](https://example.com)
+- [Ipsum](https://example.com)
+- [Dolor](https://example.com)

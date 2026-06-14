@@ -1,0 +1,18 @@
+<extend template="base.shtml">
+<head id="head">
+</head>
+<body id="body">
+	<article class="post">
+		<h1 :text="$page.title"></h1>
+		<p class="post-meta" :text="$page.date.format('2006-01-02')"></p>
+		<div class="post-body" :html="$page.content()"></div>
+	</article>
+	<div id="prev-next">
+		<div class="prev" :if="$page.prevPage?()">
+			<a href="$if.link()" :text="$if.title"></a>
+		</div>
+		<div class="next" :if="$page.nextPage?()">
+			<a href="$if.link()" :text="$if.title"></a>
+		</div>
+	</div>
+</body>

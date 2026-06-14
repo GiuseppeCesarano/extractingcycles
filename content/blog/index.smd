@@ -1,0 +1,16 @@
+---
+.title = "Blog",
+.date = @date("2026-01-01T00:00:00"),
+.author = "Sample Author",
+.layout = "blog.shtml",
+.alternatives = [{
+    .name = "rss",
+    .layout = "blog.xml",
+    .output = "index.xml",
+}],
+.draft = false,
+---
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. A one or two line
+description of what this blog covers can go here, followed by the full list
+of posts below. An [RSS feed]($link.alternative('rss')) is also available.

@@ -1,0 +1,10 @@
+Site {
+    .title = "Extracting Cycles",
+    .host_url = "https://extractingcycles.com",
+    .content_dir_path = "content",
+    .layouts_dir_path = "layouts",
+    .assets_dir_path = "assets",
+    .static_assets = [
+        "Temml.woff2",
+    ],
+}
