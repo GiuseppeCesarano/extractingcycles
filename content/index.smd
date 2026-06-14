@@ -1,18 +1,19 @@
 ---
 .title = "Home",
-.date = @date("2026-01-01T00:00:00"),
-.author = "Sample Author",
-.layout = "index.shtml",
+.date = @date("2026-06-14T00:00:00"),
+.author = "Giuseppe Cesarano",
+.layout = "page.shtml",
 .draft = false,
 ---
 
-[Lorem ipsum dolor sit amet, consectetur adipiscing elit.]($text.attrs('lede'))
+[The destination is fast code. This blog is about the road there.]($text.attrs('lede'))
 
-Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
-minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
-commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit
-esse cillum dolore eu fugiat nulla pariatur.
+This blog isn't really about fast code, it's about how we got there.  
 
-Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia
-deserunt mollit anim id est laborum. Curabitur blandit tempus porttitor,
-condimentum maecenas sed diam eget risus varius blandit sit amet non magna.
+SWAR tricks, bit-twiddling, branch-killing, cache-friendly layouts, the interesting part is rarely
+the final benchmark or the code itself.  
+It's the wrong turns, dead ends, small intuitions, and 
+
+_"wait, why does THIS make it faster"_
+
+moments along the way.

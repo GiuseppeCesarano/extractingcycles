@@ -1,22 +1,36 @@
 ---
 .title = "About",
-.date = @date("2026-01-01T00:00:00"),
-.author = "Sample Author",
+.date = @date("2026-06-14T00:00:00"),
+.author = "Giuseppe Cesarano",
 .layout = "page.shtml",
 .draft = false,
 ---
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-tempor incididunt ut labore et dolore magna aliqua. A short paragraph about
-who you are, what you work on, and what kind of performance problems you
-enjoy poking at usually goes here.
+Hey welcome! This is my blog about cpu and software performance, main courses will be
+SWAR tricks, bit-twiddling a bunch of simd, stopping the cpu from predicting the future
+and whatever stupid low level stuff i find fun enough to write about.
 
-Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in
-voluptate velit esse cillum dolore eu fugiat nulla pariatur.
+I'm currently the only person here. I put a genuinely stupid amount of effort into those
+posts and in the featured software!
 
-## Elsewhere
+If you're into this kind of stuff too and want to write something, hit me up, I'd love 
+collabs. Genuinely. Co-authoring, guest posts, "Hey I think your benchmark is wrong",
+everything welcome
 
-- [Lorem](https://example.com)
-- [Ipsum](https://example.com)
-- [Dolor](https://example.com)
+Also: don't take anything here too seriously. I will absolutely get things wrong sometimes,
+I will absolutely make jokes about it, and if you spot a mistake, telling me is a gift,
+not an attack. This is a silly billy blog written by someone who cares too much.
+
+## A small ask
+
+If you used something from here and it made your code faster, I'd love to hear about it.  
+
+If you published something where this blog helped you get there, let me know too it would 
+genuinely makes my day.
+
+## Contacts
+
+- **[giuseppecesarano@extractingcycles.com](mailto:giuseppecesarano@extractingcycles.com)**:  - for collabs, corrections, "your benchmark is wrong" emails, whatever.
+- **[My GitHub](https://github.com/GiuseppeCesarano)**:  — where the rest of my questionable code lives.
+- **[extractingcycles.com source](https://github.com/GiuseppeCesarano/extractingcycles)**:  — yes, the blog itself is open source, go poke around. Or open an issue if you find a better way to do something.
+
