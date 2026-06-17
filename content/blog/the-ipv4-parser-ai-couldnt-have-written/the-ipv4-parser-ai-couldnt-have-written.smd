@@ -1,0 +1,342 @@
+---
+.title = "The IPv4 Parser AI Couldn't Have Written",
+.date = @date("2026-06-20T00:00:00"),
+.author = "Giuseppe Cesarano",
+.layout = "post.shtml",
+.draft = false,
+---
+
+[SWAR]($text.attrs('tag-peach')) [Zig]($text.attrs('tag-mauve')) [AI]($text.attrs('tag-teal'))
+
+I was reading Daniel Lemire's blog, which I highly recommend; specifically:
+[Parsing IP addresses quickly (portably, without SIMD magic)](https://lemire.me/blog/2025/12/27/parsing-ip-addresses-quickly-portably-without-simd-magic/).
+
+Reading the title and given his track record, I braced myself for some sort of insane SWAR (SIMD Within A Register) parsing technique, maybe combined with 
+obscure bit twiddling that I'm too stupid to understand without reading it 12 times, or something along those lines.
+
+To my surprise, Lemire showcased a linear scan function _mostly_ written by AI.  
+
+Although I agree with his conclusion that he shouldn't retire just yet, I think we should avoid relying on AI to generate fast code altogether!!
+
+Before diving into my claim, let's firstly satisfy our hunger for SWAR and bit tricks!
+
+## A fast, non-SIMD IPv4 parser
+
+The first thing I do when I approach such problems is to get a feel for the valid inputs.
+When I think about IPv4, three examples quickly come to mind:
+
+```
+192.168.1.1
+255.255.255.255
+0.0.0.0
+```
+
+_To keep things simple, we are going to treat only the dotted decimal version!_  
+
+From there, we start noticing some things:
+
+1) The valid input range for each triplet is [0, 255].
+2) The input length ranges from 7 to 15 characters.
+3) Each string must have 3 dots, '.'
+
+### Reading input:
+
+Since the input string will always fit into 16 bytes, we can smash it into 2 `u64`, 
+loading bytes `[0..8]` in the first `u64`, which we will call `head`, and bytes `[len - 8..len]` 
+in the second `u64`, which we will refer to as `tail`.  
+
+Unfortunately, with an `address.len == 7`, we will encounter two problems: the first read will 
+access 1 byte over the input length (since it will try to read until byte 8), and the second read 
+will access 1 byte before the start of our input string, given pointer math.
+
+Luckily, the first problem is an acceptable quirk, and we can simply document it in the API contract, 
+since almost always, strings will be null-terminated or part of a larger buffer, and in both cases, 
+we get a safe 8-byte read!  
+
+As for the second problem, we have to adjust our subtraction such that, in case the input length is 7,
+we don't overflow or read before the start of the string.  
+
+Doing so, the two reads become:
+
+```zig
+var head: u64 = undefined;
+@memcpy(std.mem.asBytes(&head), address[0..8]);
+```
+
+```zig
+var tail: u64 = undefined;
+const len_is_7 = address.len == 7;
+const begin = if (len_is_7) 0 else address.len - 8;
+const end = begin + 8;
+@memcpy(std.mem.asBytes(&tail), address[begin..end]);
+tail <<= if (len_is_7) 8 else 0; // More on that one later!
+```
+
+_Note: Every decent compiler will not emit branches for those ifs!_
+
+### String to integer conversion:
+
+Let's now have a look at what happens with IP address `"192.168.1.1"`:
+
+```
+low = '192.168.'
+high = '.168.1.1'
+```
+
+The `low` variable looks like a great candidate for SWAR integer parsing!!  
+It's a technique that Lemire discusses a lot on his blog: [link](https://lemire.me/blog/2022/01/21/swar-explained-parsing-eight-digits/).
+It's basically doing parallel operations inside a regular general-purpose register instead of a dedicated SIMD one!
+
+#### How SWAR integer-parsing works:
+
+Typically, when parsing a string like `"192"` into its integer representation, 
+we iterate through each byte to verify it falls within the valid ASCII range of `0x30` (`'0'`) to `0x39` (`'9'`).
+For each valid character, we subtract the ASCII offset, multiply the result by its positional value 
+(its power of 10), and add it to a running total. Once the iteration is complete, the total holds the final integer value.
+
+All of that iterative work can be done in a branchless manner with the following snippet:
+
+_Note: In Zig, math operators followed by % are an explicit way to allow overflow (+% addition with overflow)._
+
+```zig
+// On a Little-Endian CPU, memory is loaded right-to-left into registers.
+// Memory layout:  ['1', '9', '2'] -> 0x31, 0x39, 0x32
+const input = 0x32_39_31; 
+
+// Subtract the ASCII offset (0x30) from all 3 bytes simultaneously 
+// using a single wrapping subtraction (-%).
+const d = input -% 0x30_30_30; // = 0x32_39_31 - 0x30_30_30 = 0x02_09_01
+
+// Now we need to multiply those values by their positional value
+// 1 * 100, 9 * 10, 2 * 1 ->  * 0x_64_0A_01
+const value = d *% 0x640A01;
+```
+
+Our result now resides in the third lane and could easily be extracted with `(value & 0x00FF0000) >> 16`. 
+However, we can play smarty-pants and use a purpose-built x86_64 instruction introduced with the BMI2 extension: `pext`.  
+
+
+`pext` will accept two operands, an input and a mask, and will basically copy the input bits where the mask bits are `1` to the
+rightmost spot.
+
+Using this, our extraction simply becomes: `pext(value, 0xFF0000)`; the reason to involve such an obscure operation will be clearer later!
+
+Since this function will try to parse everything, invalid triplets like `"999"` or even non-digit characters, we need a validation step...
+
+Usually, SWAR validation is simply a range check to see if our processed characters fall nicely between `0x00` and `0x09`. We can achieve this without looping by exploiting the most significant bit, `0x80`, in each lane. If we add `0x76` to a valid digit like `0x09`, it becomes `0x7F`, leaving that highest bit unset. But the moment a value hits an invalid `0x0A` or higher, adding `0x76` pushes it to `0x80` or above, immediately flipping the highest bit to `1`.
+
+There is a catch: if an input lane already had its highest bit set from the start (like a non-ASCII character), this addition might cause an overflow that wraps around and clears the bit, hiding the error. To prevent this, we combine the original subtracted register `d` with the addition result using a bitwise OR. This ensures that if the highest bit was set either before or after the addition, it stays set. Finally, masking with `0x808080` isolates these bits across all three bytes simultaneously. If the result is zero, every single character is a valid digit.
+
+```zig
+const err = ((d | (d +% 0x767676)) & 0x808080) == 0;
+```
+
+Our case, however, is a bit more convoluted because we need to enforce the strict IPv4 upper bound of 255. The maximum allowed limit for each digit depends entirely on the digits to its left. 
+
+Here is the schematic breakdown of these cross-lane dependencies:
+
+**Hundreds Lane:** └── Allowed range: [0, 2]
+
+**Tens Lane:** ├── If **Hundreds** is 0 or 1, Allowed range: [0, 9]  
+└── If **Hundreds** is 2, Allowed range: [0, 5]  
+
+**Ones Lane:** ├── If **Hundreds** == 2 AND **Tens** == 5, Allowed range: [0, 5]  
+└── Otherwise, Allowed range: [0, 9]
+
+
+Our validation masks then are:
+```
+0x76767D = no 2 
+0x767A7D = 2 present but 5 is not 
+0x7A7A7D = 2 and 5 both present
+```
+
+To map these cascading boundaries without branching, we can dynamically morph the base mask (`0x76767D`) by computing precise `0x04` bit adjustments directly from the digits. If the 'hundreds' digit is `"2"`, we add `0x04` to the 'tens' lane to shift its max bound from `"9"` to `"5"` (turning `0x76` into `0x7A`). If both 'hundreds' is `"2"` and 'tens' is `"5"`, we add `0x04` to the 'ones' lane.
+
+```zig
+const base_mask = 0x76767D;
+const get_25 = (d +% 0x7B7E) & 0x8080;
+// Compare the hundreds lane with the tens lane; if the 200 bit is set
+// then the 50 bit can be left set (if it is on)
+// Shift the final result to get 0x04 in the right position
+const adjust = (get_25 & ((get_25 << 8) | 0x80)) << 3;
+
+const err = (d | (d +% 0x76767D +% adjust)) & 0x808080;
+```
+
+Like so, we have the whole input validated at the cheap cost of some bit manipulation and my personal mental well-being.  
+
+Since we have `u64` registers, we could parse two input triplets at a time; the process is identical, and the check for the dot character is super simple to add. The final result is:
+
+```zig
+inline fn parseTwoTripletsLow(chunk: u64, active_lanes: u64) ParseResult {
+    // 0x2E is for the '.' validation
+    const d = chunk -% (0x2E3030302E303030 & active_lanes); // More on that & later
+
+    const get_25 = (d +% 0x00007B7E00007B7E) & 0x0000808000008080;
+    const adjust = (get_25 & ((get_25 << 8) | 0x0000008000000080)) << 3;
+    const err = (d | (d +% 0x7F76767D7F76767D +% adjust)) & 0x8080808080808080;
+
+    const compact = d *% 0x640A01;
+
+    return .{ .value = @intCast(pext(compact, 0x00FF000000FF0000)), .err = err };
+}
+```
+
+_Note: Now the `pext` makes sense; it avoids us doing 2 ANDs, 2 shifts, and 1 OR._  
+
+_Note: Another function with slightly different constants can be used for parsing the `high` variable._
+
+
+### Piping
+
+We saw the next issue coming from a mile away. When we developed the parsing routine, we only considered the `low` variable, which happened to be neatly structured as `"192.168."`. But our inputs vary wildly, as evidenced by the `high` variable:
+
+```
+high = '.168.1.1'
+```
+
+We need machinery to reformat every possible input into the layout that `parseTwoTriplets` expects. For this `high` variable, the target layout would be:
+
+```
+chunk = ".  1.  1"
+```
+
+The `chunk` is essentially `high` with its bytes scattered into specific positions; it's the inverse of our old friend `pext`! Fortunately, the hardware gods have provided exactly that: meet `pdep`.
+
+`pdep` takes an input value and a mask. It reads the bits of the input from least to most significant and places each one into the position of the next set bit in the mask, also from least to most significant. In other words, the mask describes *where* the output bits should land.
+
+In our case, we call `pdep(high >> 40, 0xFF0000FFFF0000FF)`. The shift is necessary to get the interesting part at the start, since `pdep` will actually read right-to-left (eheh Little-Endian) to produce the `".  1.  1"` layout above. The mask encodes which byte lanes should be populated and which should remain zeroed out. The zeroed lanes are important because a non-zero value in an inactive lane would cause the `lane - 0x30` subtraction to trip our validity checks.
+
+The remaining problem is: how do we find the right `pdep` mask for a given input's dot configuration? We hash-map it!!  
+
+To build the index into that table, we need to locate the dots in the input. We start by XORing the input against `0x2E2E2E2E2E2E2E2E` (where `0x2E` is the ASCII code for `'.'`). Thanks to the XOR identity `x ^ x == 0`, lanes that contain a dot become `0x00`. We then subtract `0x0101010101010101` from the result: any lane that was `0x00` will borrow from the lane above, producing `0xFF` in that position. Finally, ANDing with `0x8080808080808080` isolates only those high bits, giving us a clean bitmask of the dot positions.
+
+This dot-position mask is then multiplied by a magic constant to map it to a unique slot in a 32-entry lookup table (we only need 32 slots to cover all valid dot configurations). We need to guarantee that no two valid dot masks collide in the map, so a constant needs to be carefully brute-forced into existence :P
+
+```zig
+var index_high = tail ^ 0x2E2E2E2E2E2E2E2E;
+index_high -%= 0x0101010101010101;
+index_high &= 0x8080808080808080;
+index_high *%= 0x39EDDB77A53AC365; // Magic constant
+index_high >>= 59; // 32 slots are enough for all valid configurations
+```
+
+*Note: Invalid characters may occasionally produce a valid-looking index. We simply let `parseTwoTriplets`'s existing checks catch those cases.*
+
+With the index in hand, we look up both the `pdep` mask for the lane layout and a shift amount to right-align the significant bytes before scattering them. Since the `pdep` masks already describe exactly which lanes are active, we can AND them with the `parseTwoTriplets` subtraction mask at the same time, disabling the inactive lanes so they don't trip our checks.
+
+Putting it all together:
+
+```zig
+const high_pdep  = lut_high.pdep[index_high];
+const high_shift = lut_high.shift[index_high];
+const high = parseTwoTripletsHigh(pdep(tail >> @intCast(high_shift), high_pdep), high_pdep);
+```
+
+### What do we do now?
+
+Well, now we need to start loving our work the way my parents love me: conditionally, and only if I perform flawlessly.
+
+We need to build a really really good test suite because we shouldn't trust our work; this is outside the scope of the post, but it should really be a torture test!!  
+
+The reason is that even with the best ideas we will miss edge cases. For example, our loading routine treats `255.255.255` the same as `255.255.255.255`, making it a valid input :)  
+
+A simple fix is to check that `address.len - 3 == lut_high[high_index].active_lanes + lut_low[low_index].active_lanes` (so we need to add an active lane count to the lookup table).  
+
+At this point, we squint super hard to our code and alternative ideas or inefficiencies will surface, for example look at our previous snippet:
+
+```zig
+var index_high = tail ^ 0x2E2E2E2E2E2E2E2E;
+index_high -%= 0x0101010101010101;
+index_high &= 0x8080808080808080;
+index_high *%= 0x39EDDB77A53AC365; // Magic constant
+index_high >>= 59; // 32 slots are enough for all valid configurations
+```
+
+The last 3 operations are basically a slightly more complex version of a `pext`, we gather the top bits, do some shuffling then push 'em to the right; At the cost of a bigger look up table, we could exchange this sequence for a single `pext`, the final version would be:
+
+```zig
+inline fn hash(data: u64) usize {
+    var h = data ^ 0x2E2E2E2E2E2E2E2E;
+    h -%= 0x0101010101010101;
+    return @intCast(pext(h, 0x0080808080808000));
+}
+```
+
+The same thing is applicable for our adjustments computation in our `parseTwoTriplets` functions, we can use a look up table instead:
+
+```zig
+inline fn parseTwoTripletsHigh(chunk: u64, active_lanes: u64) ParseResult {
+    const d = chunk -% (0x3030302E3030302E & active_lanes);
+
+    const index = pext(d +% 0x007B7E00007B7E00, 0x0080800000808000);
+    const adjust = adjust_lut_high[index];
+
+    const err = (d | (d +% 0x76767D7F76767D7F +% adjust)) & 0x8080808080808080;
+    const compact = d *% 0x640A01;
+
+    return .{ .value = @intCast(pext(compact, 0xFF000000FF000000)), .err = err };
+}
+```
+
+I've decided to keep both those changes because they resulted in increased throughput.
+
+Other than squinting really hard, we copy-paste the algorithm to [Compiler Explorer](https://godbolt.org) and check the assembly for waste while we fiddle with the code trying to remove it, `llvm-mca` could also help finding bottlenecks.   
+
+Those last steps need to be repeated until nothing more can be found and the algorithm passes all tests. The presented version of the algorithm went through that exact process 
+at least 6 times.
+
+### Is that at least actually fast??
+
+I’ve put up a benchmark that generates 1.5M addresses, parses them with our function, and here are the results that I got on my i7700k:
+```
+// Governor set to performance
+❯ sudo taskset -c 3 chrt -f 99 ./benchmark
+info: Parsed 1500000 random IPs 64 times (1274.88MB) in 490992976 ns
+info: Average latency: 5.11 ns/ip
+info: Throughput: 2.60 GB/s
+```
+
+We can also repurpose [Robert Graham's](https://cybersect.substack.com/p/more-ipv4-address-parsing) benchmark. These are the results for the 1.5M addresses input size (I've removed the SSE version since I couldn't get a valid checksum):
+
+```
+[      ]  freq      time    cycl inst  ipc brch miss  l1d      checksum
+[   ai ]   4.5-GHz  20.5-ns   92  153  1.7   38  1.8  0.3    [0x00000000]
+[ swar ]   4.5-GHz  24.4-ns  109  365  3.3    3  0.0  0.3    [0x00000000]
+[ from ]   4.5-GHz  31.0-ns  139  362  2.6   71  1.7  0.3    [0x00000000]
+[  dfa ]   4.5-GHz  35.7-ns  160  317  2.0   34  0.8  0.3    [0x00000000]
+[  fsm ]   4.5-GHz  36.5-ns  164  371  2.3  107  1.7  0.3    [0x00000000]
+[ fsm2 ]   4.5-GHz  30.9-ns  139  308  2.2   84  2.0  0.3    [0x00000000]
+[  bmi ]   4.5-GHz   7.1-ns   32  102  3.2    6  0.0  0.3    [0x00000000]
+```
+
+_Note: This benchmark disfavors us since it passes a pointer to the start of the address and a maximum readable length, but not the actual length of the IP; we needed to find the end of the IP before calling our routine._
+
+As both benchmarks show, our function is quite fast, not as fast as some SIMD implementations, but this version could be used with buffers that don't guarantee 16 readable bytes while not requiring AVX512 to do so.  
+
+Another use case could be in targets like kernel code where SSE registers aren't pushed by default to the stack, making SIMD invocation expensive for short-running functions.
+
+## Why can't AI do that?
+
+To be precise: AI *can* produce working, fast code. With a well trained eye or a carefully crafted prompt, it can even optimize slow code by swapping bad patterns for known good ones. What it reliably *cannot* do is invent a routine using novel or obscure tricks. Some of the techniques shown here I have literally never encountered in the wild, and honestly, I consume a massive amount of literature on the matter. This means that, at best, such approaches are wildly underrepresented compared to traditional scalar versions. Because LLMs are ultimately statistical predictors, they can't reliably generate what isn't heavily featured in their data. More importantly, writing such routines requires deep reasoning capabilities and a skillful taste for weaving complex ideas together, traits that in my opinion are missing from today's AI.
+
+When an AI tries to write an optimized function, it’s essentially just pasting known patterns over the problem. But as we've seen with our BMI parser, optimal functions are defined by their constraints, both hardware imposed (like `pext` and `pdep` tanking on pre-2020 AMD CPUs) and problem specific. For instance, a non-validating parser could be twice as fast as ours, while a pre-AVX512 SIMD version requires both SIMD registers and a minimum readable buffer of 16 bytes.
+
+Problem constraints aren't just hurdles; they are part of the solution itself. An optimal function does exactly what is needed to solve the problem in the fastest possible way, and nothing more. Extra work, like input preprocessing, is only acceptable if it pays dividends in throughput or latency. Spotting and exploiting these constraints requires inventiveness. And honestly, if we don't have to reinvent the optimal algorithm every time, why should we let an AI try to do so?
+
+_Note: An example of this is how our routine happily parses `"001.001.001.001"` as `1.1.1.1`. Changing this behavior would require extra checks, altering the performance profile._
+
+Given a curated set of optimal implementations, the real challenge is understanding the current problem's constraints and picking the exact right tool for the job. *This* is where an LLM could shine, but only for the first half of the equation. Its role should be to read the surrounding code, extract the constraints, perhaps ask the developer clarifying questions, and enforce those constraints using machinery like Zig's `std.debug.assert()`. 
+
+The actual algorithm selection shouldn't be left to the model's probabilistic whims. Instead, the AI's extracted constraints should feed directly into a deterministic selection tree, hand-crafted by the performance engineers who wrote the implementations. No ambiguity, no hallucinated trade-offs, just a hardcoded lookup mapping the constraint space to the correct function.
+
+In my opinion this hybrid approach would yield far higher quality and predictability than asking an AI to generate fast code from scratch. Having an expert encode their knowledge once, both into a library of bulletproof implementations and the decision tree that governs them while the LLM handles constraint extraction, splits the work perfectly along the lines of what each party actually excels at.
+
+We cannot remove the burden from performance engineers, they must suffer, but we can remove it from everyone else.
+
+[Link To The Code](https://github.com/GiuseppeCesarano/extractingcycles/tree/master/content/blog/first-post)
+
+---
+
+_A special thank you to my dear friends who read the draft. Since this is my first technical post, your feedback was vital, it completely quelled my "writing anxiety" and gave me the push I needed to hit publish without feeling like my work was just noise._
