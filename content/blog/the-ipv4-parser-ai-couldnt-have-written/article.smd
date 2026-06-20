@@ -135,7 +135,8 @@ Our case, however, is a bit more convoluted because we need to enforce the stric
 
 Here is the schematic breakdown of these cross-lane dependencies:
 
-**Hundreds Lane:** └── Allowed range: [0, 2]
+**Hundreds Lane:**  
+└── Allowed range: [0, 2]
 
 **Tens Lane:** ├── If **Hundreds** is 0 or 1, Allowed range: [0, 9]  
 └── If **Hundreds** is 2, Allowed range: [0, 5]  
