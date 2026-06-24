@@ -72,7 +72,7 @@ const end = begin + 8;
 tail <<= if (len_is_7) 8 else 0; // More on that one later!
 ```
 
-_Note: Every decent compiler will not emit branches for those ifs!_
+_Note: Every optimizing compiler will not emit branches for those ifs!_
 
 ### String to integer conversion:
 
