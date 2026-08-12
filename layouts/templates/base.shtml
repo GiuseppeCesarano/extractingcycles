@@ -94,6 +94,13 @@
 				// Copy button for code blocks.
 				document.querySelectorAll("pre > code").forEach(function (codeEl) {
 					var pre = codeEl.parentElement;
+
+					var wrap = document.createElement("div");
+					wrap.className = "code-block";
+					if (codeEl.className) wrap.setAttribute("data-lang", codeEl.className);
+					pre.parentNode.insertBefore(wrap, pre);
+					wrap.appendChild(pre);
+
 					var btn = document.createElement("button");
 					btn.type = "button";
 					btn.className = "copy-btn";
@@ -124,7 +131,7 @@
 							done();
 						}
 					});
-					pre.appendChild(btn);
+					wrap.appendChild(btn);
 				});
 
 				// Light/dark theme toggle, persisted to localStorage.

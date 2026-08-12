@@ -479,13 +479,31 @@ pre {
   line-height: 1.55;
 }
 
+.code-block {
+  position: relative;
+  margin: 1.6em 0;
+}
+
+.code-block > pre {
+  margin: 0;
+}
+
 /* On wide viewports, let code blocks spill past the prose column —
    reading width stays comfortable but code gets room to stretch. */
 @media (min-width: 64rem) {
-  pre {
+  pre,
+  .code-block {
     margin-left: -2.5rem;
     margin-right: -2.5rem;
+  }
+
+  pre {
     padding: 1.1rem 1.5rem;
+  }
+
+  .code-block > pre {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 
@@ -497,7 +515,8 @@ pre code {
 }
 
 /* Quiet language label in the corner of fenced code blocks */
-pre code[class]::before {
+pre code[class]::before,
+.code-block[data-lang]::after {
   content: attr(class);
   position: absolute;
   bottom: 0.7rem;
@@ -507,6 +526,15 @@ pre code[class]::before {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--fg-faint);
+  pointer-events: none;
+}
+
+.code-block[data-lang]::after {
+  content: attr(data-lang);
+}
+
+.code-block > pre code[class]::before {
+  content: none;
 }
 
 /* -------------------- Copy button -------------------- */
@@ -531,8 +559,8 @@ pre code[class]::before {
     transform 0.1s ease;
 }
 
-pre:hover .copy-btn,
-pre:focus-within .copy-btn,
+.code-block:hover .copy-btn,
+.code-block:focus-within .copy-btn,
 .copy-btn:focus-visible,
 .copy-btn.copied {
   opacity: 1;
