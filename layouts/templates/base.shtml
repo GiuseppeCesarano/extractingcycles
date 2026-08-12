@@ -3,7 +3,8 @@
 	<head id="head">
 		<meta charset="utf-8">
 		<meta name="viewport" content="initial-scale=1">
-		<title :text="$site.title"></title>
+		<title :text="$page.title.suffix(' — ', $site.title)"></title>
+		<meta name="description" content="$page.description">
 		<meta name="theme-color" id="theme-color-meta" content="#24273a">
 		<script>
 			(function () {
@@ -26,14 +27,15 @@
 		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%80%3C/text%3E%3C/svg%3E">
 		<link type="text/css" rel="stylesheet" href="$site.asset('style.css').link()">
 		<link type="text/css" rel="stylesheet" href="$site.asset('highlight.css').link()">
-		<!-- mathtex -->
-		<link type="text/css" rel="stylesheet" href="$site.asset('Temml-Local.css').link()">
-		<script defer src="$site.asset('temml.min.js').link()"></script>
-		<script defer src="$site.asset('render-mathtex.js').link()"></script>
-		<!-- /mathtex -->
+		<!-- mathtex: opt in per page with .custom = { "math": true } -->
+		<ctx :if="$page.custom.get?('math')">
+			<link type="text/css" rel="stylesheet" href="$site.asset('Temml-Local.css').link()">
+			<script defer src="$site.asset('temml.min.js').link()"></script>
+			<script defer src="$site.asset('render-mathtex.js').link()"></script>
+		</ctx>
 		<super>
 	</head>
-	<body id="body">
+	<body>
 		<div class="progress-bar" id="progress-bar"></div>
 		<header>
 			<p class="site-title">
@@ -47,7 +49,9 @@
 				<button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle light and dark theme">&#127769;</button>
 			</nav>
 		</header>
-		<super>
+		<main id="main">
+			<super>
+		</main>
 		<footer>
 			<div class="footer-row">
 				<span :text="$site.title"></span>
@@ -162,12 +166,13 @@
 					if (!progressBar) return;
 					var scrollTop = window.scrollY || document.documentElement.scrollTop;
 					var max = document.documentElement.scrollHeight - window.innerHeight;
-					var pct = max > 0 ? (scrollTop / max) * 100 : 0;
-					progressBar.style.width = Math.min(100, Math.max(0, pct)) + "%";
+					var pct = max > 0 ? scrollTop / max : 0;
+					progressBar.style.transform =
+						"scaleX(" + Math.min(1, Math.max(0, pct)) + ")";
 				}
 				document.addEventListener("scroll", updateProgress, { passive: true });
 				window.addEventListener("resize", updateProgress);
-				updateProgress();
+				requestAnimationFrame(updateProgress);
 
 				// "Cycles burned" odometer. Pauses when the tab isn't visible.
 				var cycleEl = document.getElementById("cycle-count");

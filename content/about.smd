@@ -1,5 +1,6 @@
 ---
 .title = "About",
+.description = "About Extracting Cycles: a blog on CPU and software performance by Giuseppe Cesarano, and how to get in touch.",
 .date = .date("2026-06-14T00:00:00"),
 .authors = ["Giuseppe Cesarano"],
 .layout = "page.shtml",

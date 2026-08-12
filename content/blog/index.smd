@@ -1,5 +1,6 @@
 ---
 .title = "Blog",
+.description = "Posts on CPU and software performance: SWAR, bit-twiddling, SIMD, branch elimination and the wrong turns along the way.",
 .date = .date("2026-01-01T00:00:00"),
 .authors = ["Giuseppe Cesarano"],
 .layout = "blog.shtml",

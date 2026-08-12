@@ -1,5 +1,6 @@
 ---
 .title = "Home",
+.description = "SWAR tricks, bit-twiddling and cache-friendly layouts — a blog about the road to fast code, not just the benchmark at the end.",
 .date = .date("2026-06-14T00:00:00"),
 .authors = ["Giuseppe Cesarano"],
 .layout = "page.shtml",

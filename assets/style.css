@@ -44,8 +44,26 @@
   --border: var(--ctp-surface0);
   --border-strong: var(--ctp-surface1);
 
+  /* The palette as small text. Decorative uses keep --ctp-* directly. */
+  --ink-rosewater: var(--ctp-rosewater);
+  --ink-pink: var(--ctp-pink);
+  --ink-mauve: var(--ctp-mauve);
+  --ink-red: var(--ctp-red);
+  --ink-peach: var(--ctp-peach);
+  --ink-yellow: var(--ctp-yellow);
+  --ink-green: var(--ctp-green);
+  --ink-teal: var(--ctp-teal);
+  --ink-sapphire: var(--ctp-sapphire);
+  --ink-blue: var(--ctp-blue);
+  --ink-overlay1: var(--ctp-overlay1);
+  --ink-overlay2: var(--ctp-overlay2);
+
+  /* Tag chips tint their own ink over this base */
+  --tag-tint: 16%;
+  --tag-base: var(--ctp-base);
+
   /* A single accent, used sparingly */
-  --accent: var(--ctp-peach);
+  --accent: var(--ink-peach);
 
   --content-width: 44rem;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto,
@@ -89,6 +107,27 @@
   --ctp-mantle: #e6e9ef;
   --ctp-crust: #dce0e8;
 
+  /* Latte accents, darkened the minimum needed to reach AA */
+  --ink-rosewater: #b3462f;
+  --ink-pink: #bb1d91;
+  --ink-mauve: #8635ef;
+  --ink-red: #d20f39;
+  --ink-peach: #b64301;
+  --ink-yellow: #935d13;
+  --ink-green: #307820;
+  --ink-teal: #12747a;
+  --ink-sapphire: #177383;
+  --ink-blue: #0c5af4;
+  --ink-overlay1: #65687c;
+  --ink-overlay2: #66687b;
+
+  /* subtext0 is 4.37:1 on base, just under AA */
+  --fg-muted: var(--ctp-subtext1);
+  --fg-faint: var(--ctp-subtext1);
+
+  --tag-tint: 14%;
+  --tag-base: #ffffff;
+
   color-scheme: light;
 }
 
@@ -120,6 +159,26 @@
     --ctp-base: #eff1f5;
     --ctp-mantle: #e6e9ef;
     --ctp-crust: #dce0e8;
+
+    /* Keep in sync with :root[data-theme="light"] above */
+    --ink-rosewater: #b3462f;
+    --ink-pink: #bb1d91;
+    --ink-mauve: #8635ef;
+    --ink-red: #d20f39;
+    --ink-peach: #b64301;
+    --ink-yellow: #935d13;
+    --ink-green: #307820;
+    --ink-teal: #12747a;
+    --ink-sapphire: #177383;
+    --ink-blue: #0c5af4;
+    --ink-overlay1: #65687c;
+    --ink-overlay2: #66687b;
+
+    --fg-muted: var(--ctp-subtext1);
+    --fg-faint: var(--ctp-subtext1);
+
+    --tag-tint: 14%;
+    --tag-base: #ffffff;
 
     color-scheme: light;
   }
@@ -313,13 +372,13 @@ header {
 }
 
 @keyframes rainbow {
-  0%   { color: var(--ctp-red); }
-  16%  { color: var(--ctp-peach); }
-  33%  { color: var(--ctp-yellow); }
-  50%  { color: var(--ctp-green); }
-  66%  { color: var(--ctp-sapphire); }
-  83%  { color: var(--ctp-mauve); }
-  100% { color: var(--ctp-red); }
+  0%   { color: var(--ink-red); }
+  16%  { color: var(--ink-peach); }
+  33%  { color: var(--ink-yellow); }
+  50%  { color: var(--ink-green); }
+  66%  { color: var(--ink-sapphire); }
+  83%  { color: var(--ink-mauve); }
+  100% { color: var(--ink-red); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -365,10 +424,10 @@ nav a:active {
   transform: scale(0.94);
 }
 
-nav a:nth-child(1):hover { color: var(--ctp-blue); }
-nav a:nth-child(2):hover { color: var(--ctp-green); }
-nav a:nth-child(3):hover { color: var(--ctp-mauve); }
-nav a:nth-child(4):hover { color: var(--ctp-peach); }
+nav a:nth-child(1):hover { color: var(--ink-blue); }
+nav a:nth-child(2):hover { color: var(--ink-green); }
+nav a:nth-child(3):hover { color: var(--ink-mauve); }
+nav a:nth-child(4):hover { color: var(--ink-peach); }
 
 .theme-toggle {
   display: inline-block;
@@ -405,7 +464,7 @@ p code, li code, td code, h1 code, h2 code, h3 code {
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  color: var(--ctp-rosewater);
+  color: var(--ink-rosewater);
   font-style: normal;
 }
 
@@ -489,8 +548,8 @@ pre:focus-within .copy-btn,
 }
 
 .copy-btn.copied {
-  color: var(--ctp-green);
-  border-color: var(--ctp-green);
+  color: var(--ink-green);
+  border-color: var(--ink-green);
 }
 
 /* -------------------- Quotes & figures -------------------- */
@@ -654,13 +713,13 @@ th {
   margin-bottom: 0.35em;
 }
 
-.post-entry:nth-child(7n+1) .date { color: var(--ctp-blue); }
-.post-entry:nth-child(7n+2) .date { color: var(--ctp-green); }
-.post-entry:nth-child(7n+3) .date { color: var(--ctp-peach); }
-.post-entry:nth-child(7n+4) .date { color: var(--ctp-mauve); }
-.post-entry:nth-child(7n+5) .date { color: var(--ctp-teal); }
-.post-entry:nth-child(7n+6) .date { color: var(--ctp-yellow); }
-.post-entry:nth-child(7n+7) .date { color: var(--ctp-pink); }
+.post-entry:nth-child(7n+1) .date { color: var(--ink-blue); }
+.post-entry:nth-child(7n+2) .date { color: var(--ink-green); }
+.post-entry:nth-child(7n+3) .date { color: var(--ink-peach); }
+.post-entry:nth-child(7n+4) .date { color: var(--ink-mauve); }
+.post-entry:nth-child(7n+5) .date { color: var(--ink-teal); }
+.post-entry:nth-child(7n+6) .date { color: var(--ink-yellow); }
+.post-entry:nth-child(7n+7) .date { color: var(--ink-pink); }
 
 .post-entry .title {
   display: inline-block;
@@ -829,13 +888,13 @@ footer a:hover {
   transform: scale(1.12) rotate(-3deg);
 }
 
-.tag-blue   { background: rgba(138, 173, 244, 0.16); color: var(--ctp-blue); }
-.tag-green  { background: rgba(166, 218, 149, 0.16); color: var(--ctp-green); }
-.tag-peach  { background: rgba(245, 169, 127, 0.16); color: var(--ctp-peach); }
-.tag-mauve  { background: rgba(198, 160, 246, 0.16); color: var(--ctp-mauve); }
-.tag-teal   { background: rgba(139, 213, 202, 0.16); color: var(--ctp-teal); }
-.tag-yellow { background: rgba(238, 212, 159, 0.16); color: var(--ctp-yellow); }
-.tag-pink   { background: rgba(245, 189, 230, 0.16); color: var(--ctp-pink); }
+.tag-blue   { background: color-mix(in srgb, var(--ink-blue)   var(--tag-tint), var(--tag-base)); color: var(--ink-blue); }
+.tag-green  { background: color-mix(in srgb, var(--ink-green)  var(--tag-tint), var(--tag-base)); color: var(--ink-green); }
+.tag-peach  { background: color-mix(in srgb, var(--ink-peach)  var(--tag-tint), var(--tag-base)); color: var(--ink-peach); }
+.tag-mauve  { background: color-mix(in srgb, var(--ink-mauve)  var(--tag-tint), var(--tag-base)); color: var(--ink-mauve); }
+.tag-teal   { background: color-mix(in srgb, var(--ink-teal)   var(--tag-tint), var(--tag-base)); color: var(--ink-teal); }
+.tag-yellow { background: color-mix(in srgb, var(--ink-yellow) var(--tag-tint), var(--tag-base)); color: var(--ink-yellow); }
+.tag-pink   { background: color-mix(in srgb, var(--ink-pink)   var(--tag-tint), var(--tag-base)); color: var(--ink-pink); }
 
 /* A little pop-in on load so tags and the post list feel less static */
 @media (prefers-reduced-motion: no-preference) {
@@ -890,7 +949,7 @@ footer a:hover {
   position: fixed;
   top: 0;
   left: 0;
-  width: 0%;
+  width: 100%;
   height: 3px;
   background: linear-gradient(
     90deg,
@@ -902,7 +961,10 @@ footer a:hover {
     var(--ctp-mauve)
   );
   z-index: 9997;
-  transition: width 0.1s ease-out;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  will-change: transform;
+  transition: transform 0.1s ease-out;
 }
 
 /* One-shot sweep on page load, then handed back to scroll tracking. */
@@ -911,9 +973,9 @@ footer a:hover {
 }
 
 @keyframes progress-boot {
-  0%   { width: 0%; opacity: 1; }
-  65%  { width: 100%; opacity: 1; }
-  100% { width: 100%; opacity: 0; }
+  0%   { transform: scaleX(0); opacity: 1; }
+  65%  { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -955,7 +1017,7 @@ footer a:hover {
 
 #cycle-count {
   font-variant-numeric: tabular-nums;
-  color: var(--ctp-green);
+  color: var(--ink-green);
   transition: color 0.2s ease;
 }
 
@@ -963,7 +1025,7 @@ footer a:hover {
    hotter colors, faster LED. Purely cosmetic. */
 .cycle-counter.overclock,
 .cycle-counter.overclock #cycle-count {
-  color: var(--ctp-peach);
+  color: var(--ink-peach);
 }
 
 .cycle-counter.overclock .led {

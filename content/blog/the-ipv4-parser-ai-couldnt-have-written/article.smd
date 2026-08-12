@@ -1,5 +1,6 @@
 ---
 .title = "The IPv4 Parser AI Couldn't Have Written",
+.description = "A branchless SWAR IPv4 parser in Zig using pext/pdep, and why AI can't reach for tricks like it.",
 .date = .date("2026-06-20T00:00:00"),
 .authors = ["Giuseppe Cesarano"],
 .layout = "post.shtml",

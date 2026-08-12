@@ -7,7 +7,7 @@
 code .comment,
 code .comment.line,
 code .comment.block {
-  color: var(--ctp-overlay1, #8087a2);
+  color: var(--ink-overlay1);
   font-style: italic;
 }
 
@@ -15,19 +15,19 @@ code .keyword,
 code .keyword.control,
 code .keyword.storage,
 code .operator.word {
-  color: var(--ctp-mauve, #c6a0f6);
+  color: var(--ink-mauve);
 }
 
 code .type,
 code .type.builtin,
 code .constructor {
-  color: var(--ctp-sapphire, #7dc4e4);
+  color: var(--ink-sapphire);
 }
 
 code .string,
 code .string.special,
 code .character {
-  color: var(--ctp-green, #a6da95);
+  color: var(--ink-green);
 }
 
 code .numeric,
@@ -36,62 +36,62 @@ code .number,
 code .constant,
 code .constant.builtin,
 code .boolean {
-  color: var(--ctp-peach, #f5a97f);
+  color: var(--ink-peach);
 }
 
 code .function,
 code .function.call,
 code .function.method {
-  color: var(--ctp-blue, #8aadf4);
+  color: var(--ink-blue);
 }
 
 code .variable,
 code .variable.parameter,
 code .property,
 code .field {
-  color: var(--ctp-text, #cad3f5);
+  color: var(--fg);
 }
 
 code .attribute,
 code .label,
 code .tag {
-  color: var(--ctp-sapphire, #7dc4e4);
+  color: var(--ink-sapphire);
 }
 
 code .punctuation,
 code .punctuation.bracket,
 code .punctuation.delimiter,
 code .operator {
-  color: var(--ctp-overlay2, #939ab7);
+  color: var(--ink-overlay2);
 }
 
 code .escape {
-  color: var(--ctp-rosewater, #f4dbd6);
+  color: var(--ink-rosewater);
 }
 
 code .module,
 code .namespace {
-  color: var(--ctp-teal, #8bd5ca);
+  color: var(--ink-teal);
 }
 
 /* ziggy front-matter highlighting */
 code.ziggy {
-  color: var(--ctp-teal, #8bd5ca);
+  color: var(--ink-teal);
 }
 
 code.ziggy .keyword,
 code.ziggy .type {
-  color: var(--ctp-mauve, #c6a0f6);
+  color: var(--ink-mauve);
 }
 
 code.ziggy .string {
-  color: var(--ctp-green, #a6da95);
+  color: var(--ink-green);
 }
 
 code.ziggy .numeric.constant {
-  color: var(--ctp-peach, #f5a97f);
+  color: var(--ink-peach);
 }
 
 code.ziggy .function {
-  color: var(--ctp-blue, #8aadf4);
+  color: var(--ink-blue);
 }

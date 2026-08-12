@@ -1,7 +1,7 @@
 <extend template="base.shtml">
 <head id="head">
 </head>
-<body id="body">
+<main id="main">
 	<h1 :text="$page.title"></h1>
 	<div :html="$page.content()"></div>
 
@@ -13,4 +13,4 @@
 		</div>
 	</div>
 	<p><a href="$site.page('blog').link()">All posts &rarr;</a></p>
-</body>
+</main>
