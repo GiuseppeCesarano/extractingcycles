@@ -1,7 +1,7 @@
 ---
 .title = "About",
-.date = @date("2026-06-14T00:00:00"),
-.author = "Giuseppe Cesarano",
+.date = .date("2026-06-14T00:00:00"),
+.authors = ["Giuseppe Cesarano"],
 .layout = "page.shtml",
 .draft = false,
 ---
@@ -21,14 +21,14 @@ Also: don't take anything here too seriously. I will absolutely get things wrong
 I will absolutely make jokes about it, and if you spot a mistake, telling me is a gift,
 not an attack. This is a silly billy blog written by someone who cares too much.
 
-## A small ask
+# A small ask
 
 If you used something from here and it made your code faster, I'd love to hear about it.  
 
 If you published something where this blog helped you get there, let me know too — it would 
 genuinely make my day.
 
-## Contacts
+# Contacts
 
 - **[giuseppecesarano@extractingcycles.com](mailto:giuseppecesarano@extractingcycles.com)** — for collabs, corrections, "your benchmark is wrong" emails, whatever.
 - **[My GitHub](https://github.com/GiuseppeCesarano)** — where the rest of my questionable code lives.

@@ -1,4 +1,5 @@
-Site {
+.zine_version = "0.13.0",
+.site = .simple(.{
     .title = "Extracting Cycles",
     .host_url = "https://extractingcycles.com",
     .content_dir_path = "content",
@@ -7,4 +8,8 @@ Site {
     .static_assets = [
         "Temml.woff2",
     ],
-}
+}),
+.supermd = .{
+    .auto_target_blank = true,
+    .headings_h2 = true,
+},

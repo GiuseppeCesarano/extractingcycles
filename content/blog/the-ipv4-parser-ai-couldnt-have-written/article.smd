@@ -1,7 +1,7 @@
 ---
 .title = "The IPv4 Parser AI Couldn't Have Written",
-.date = @date("2026-06-20T00:00:00"),
-.author = "Giuseppe Cesarano",
+.date = .date("2026-06-20T00:00:00"),
+.authors = ["Giuseppe Cesarano"],
 .layout = "post.shtml",
 .draft = false,
 ---
@@ -20,7 +20,7 @@ Although I agree with his conclusion that he shouldn't retire just yet, I think 
 
 Before diving into my claim, let's firstly satisfy our hunger for SWAR and bit tricks!
 
-## A fast, non-SIMD IPv4 parser
+# A fast, non-SIMD IPv4 parser
 
 The first thing I do when I approach such problems is to get a feel for the valid inputs.
 When I think about IPv4, three examples quickly come to mind:
@@ -39,7 +39,7 @@ From there, we start noticing some things:
 2) The input length ranges from 7 to 15 characters.
 3) Each string must have 3 dots, '.'
 
-### Reading input:
+## Reading input:
 
 Since the input string will always fit into 16 bytes, we can smash it into 2 `u64`, 
 loading bytes `[0..8]` in the first `u64`, which we will call `head`, and bytes `[len - 8..len]` 
@@ -74,7 +74,7 @@ tail <<= if (len_is_7) 8 else 0; // More on that one later!
 
 _Note: Every optimizing compiler will not emit branches for those ifs!_
 
-### String to integer conversion:
+## String to integer conversion:
 
 Let's now have a look at what happens with IP address `"192.168.1.1"`:
 
@@ -87,7 +87,7 @@ The `low` variable looks like a great candidate for SWAR integer parsing!!
 It's a technique that Lemire discusses a lot on his blog: [link](https://lemire.me/blog/2022/01/21/swar-explained-parsing-eight-digits/).
 It's basically doing parallel operations inside a regular general-purpose register instead of a dedicated SIMD one!
 
-#### How SWAR integer-parsing works:
+### How SWAR integer-parsing works:
 
 Typically, when parsing a string like `"192"` into its integer representation, 
 we iterate through each byte to verify it falls within the valid ASCII range of `0x30` (`'0'`) to `0x39` (`'9'`).
@@ -191,7 +191,7 @@ _Note: Now the `pext` makes sense; it avoids us doing 2 ANDs, 2 shifts, and 1 OR
 _Note: Another function with slightly different constants can be used for parsing the `high` variable._
 
 
-### Piping
+## Piping
 
 We saw the next issue coming from a mile away. When we developed the parsing routine, we only considered the `low` variable, which happened to be neatly structured as `"192.168."`. But our inputs vary wildly, as evidenced by the `high` variable:
 
@@ -237,7 +237,7 @@ const high_shift = lut_high.shift[index_high];
 const high = parseTwoTripletsHigh(pdep(tail >> @intCast(high_shift), high_pdep), high_pdep);
 ```
 
-### What do we do now?
+## What do we do now?
 
 Well, now we need to start loving our work the way my parents love me: conditionally, and only if I perform flawlessly.
 
@@ -290,7 +290,7 @@ Other than squinting really hard, we copy-paste the algorithm to [Compiler Explo
 Those last steps need to be repeated until nothing more can be found and the algorithm passes all tests. The presented version of the algorithm went through that exact process 
 at least 6 times.
 
-### Is that at least actually fast??
+## Is that at least actually fast??
 
 I’ve put up a benchmark that generates 1.5M addresses, parses them with our function, and here are the results that I got on my i7700k:
 ```
@@ -320,7 +320,7 @@ As both benchmarks show, our function is quite fast, not as fast as some SIMD im
 
 Another use case could be in targets like kernel code where SSE registers aren't pushed by default to the stack, making SIMD invocation expensive for short-running functions.
 
-## Why can't AI do that?
+# Why can't AI do that?
 
 To be precise: AI *can* produce working, fast code. With a well trained eye or a carefully crafted prompt, it can even optimize slow code by swapping bad patterns for known good ones. What it reliably *cannot* do is invent a routine using novel or obscure tricks. Some of the techniques shown here I have literally never encountered in the wild, and honestly, I consume a massive amount of literature on the matter. This means that, at best, such approaches are wildly underrepresented compared to traditional scalar versions. Because LLMs are ultimately statistical predictors, they can't reliably generate what isn't heavily featured in their data. More importantly, writing such routines requires deep reasoning capabilities and a skillful taste for weaving complex ideas together, traits that in my opinion are missing from today's AI.
 

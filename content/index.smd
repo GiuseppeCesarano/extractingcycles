@@ -1,7 +1,7 @@
 ---
 .title = "Home",
-.date = @date("2026-06-14T00:00:00"),
-.author = "Giuseppe Cesarano",
+.date = .date("2026-06-14T00:00:00"),
+.authors = ["Giuseppe Cesarano"],
 .layout = "page.shtml",
 .draft = false,
 ---
