@@ -7,7 +7,7 @@
 .draft = false,
 ---
 
-[SWAR]($text.attrs('tag-peach')) [Zig]($text.attrs('tag-mauve')) [AI]($text.attrs('tag-teal'))
+[SWAR]($text.attrs('tag-peach')) [Zig]($text.attrs('tag-mauve')) [AI]($text.attrs('tag-teal')) [IPv4]($text.attrs('tag-green'))
 
 I was reading Daniel Lemire's blog, which I highly recommend; specifically:
 [Parsing IP addresses quickly (portably, without SIMD magic)](https://lemire.me/blog/2025/12/27/parsing-ip-addresses-quickly-portably-without-simd-magic/).

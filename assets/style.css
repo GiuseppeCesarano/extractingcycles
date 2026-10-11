@@ -7,63 +7,63 @@
    ========================================================= */
 
 :root {
-  /* Catppuccin Macchiato */
-  --ctp-rosewater: #f4dbd6;
-  --ctp-flamingo: #f0c6c6;
-  --ctp-pink: #f5bde6;
-  --ctp-mauve: #c6a0f6;
-  --ctp-red: #ed8796;
-  --ctp-maroon: #ee99a0;
-  --ctp-peach: #f5a97f;
-  --ctp-yellow: #eed49f;
-  --ctp-green: #a6da95;
-  --ctp-teal: #8bd5ca;
-  --ctp-sky: #91d7e3;
-  --ctp-sapphire: #7dc4e4;
-  --ctp-blue: #8aadf4;
-  --ctp-lavender: #b7bdf8;
-  --ctp-text: #cad3f5;
-  --ctp-subtext1: #b8c0e0;
-  --ctp-subtext0: #a5adcb;
-  --ctp-overlay2: #939ab7;
-  --ctp-overlay1: #8087a2;
-  --ctp-overlay0: #6e738d;
-  --ctp-surface2: #5b6078;
-  --ctp-surface1: #494d64;
-  --ctp-surface0: #363a4f;
-  --ctp-base: #24273a;
-  --ctp-mantle: #1e2030;
-  --ctp-crust: #181926;
+  /* Catppuccin, as light-dark(Latte, Macchiato) */
+  --ctp-rosewater: light-dark(#dc8a78, #f4dbd6);
+  --ctp-flamingo: light-dark(#dd7878, #f0c6c6);
+  --ctp-pink: light-dark(#ea76cb, #f5bde6);
+  --ctp-mauve: light-dark(#8839ef, #c6a0f6);
+  --ctp-red: light-dark(#d20f39, #ed8796);
+  --ctp-maroon: light-dark(#e64553, #ee99a0);
+  --ctp-peach: light-dark(#fe640b, #f5a97f);
+  --ctp-yellow: light-dark(#df8e1d, #eed49f);
+  --ctp-green: light-dark(#40a02b, #a6da95);
+  --ctp-teal: light-dark(#179299, #8bd5ca);
+  --ctp-sky: light-dark(#04a5e5, #91d7e3);
+  --ctp-sapphire: light-dark(#209fb5, #7dc4e4);
+  --ctp-blue: light-dark(#1e66f5, #8aadf4);
+  --ctp-lavender: light-dark(#7287fd, #b7bdf8);
+  --ctp-text: light-dark(#4c4f69, #cad3f5);
+  --ctp-subtext1: light-dark(#5c5f77, #b8c0e0);
+  --ctp-subtext0: light-dark(#6c6f85, #a5adcb);
+  --ctp-overlay2: light-dark(#7c7f93, #939ab7);
+  --ctp-overlay1: light-dark(#8c8fa1, #8087a2);
+  --ctp-overlay0: light-dark(#9ca0b0, #6e738d);
+  --ctp-surface2: light-dark(#acb0be, #5b6078);
+  --ctp-surface1: light-dark(#bcc0cc, #494d64);
+  --ctp-surface0: light-dark(#ccd0da, #363a4f);
+  --ctp-base: light-dark(#eff1f5, #24273a);
+  --ctp-mantle: light-dark(#e6e9ef, #1e2030);
+  --ctp-crust: light-dark(#dce0e8, #181926);
 
   /* Semantic aliases */
   --bg: var(--ctp-base);
   --bg-raised: var(--ctp-mantle);
   --fg: var(--ctp-text);
-  --fg-muted: var(--ctp-subtext0);
-  --fg-faint: var(--ctp-subtext0);
+  /* Latte subtext0 is 4.37:1 on base, just under AA */
+  --fg-muted: light-dark(var(--ctp-subtext1), var(--ctp-subtext0));
+  --fg-faint: var(--fg-muted);
   --border: var(--ctp-surface0);
   --border-strong: var(--ctp-surface1);
 
-  /* The palette as small text. Decorative uses keep --ctp-* directly. */
-  --ink-rosewater: var(--ctp-rosewater);
-  --ink-pink: var(--ctp-pink);
-  --ink-mauve: var(--ctp-mauve);
-  --ink-red: var(--ctp-red);
-  --ink-peach: var(--ctp-peach);
-  --ink-yellow: var(--ctp-yellow);
-  --ink-green: var(--ctp-green);
-  --ink-teal: var(--ctp-teal);
-  --ink-sapphire: var(--ctp-sapphire);
-  --ink-blue: var(--ctp-blue);
-  --ink-overlay1: var(--ctp-overlay1);
-  --ink-overlay2: var(--ctp-overlay2);
-
-  /* Tag chips tint their own ink over this base */
-  --tag-tint: 16%;
-  --tag-base: var(--ctp-base);
+  /* The palette as small text; Latte darkened the minimum needed to reach AA.
+     Decorative uses keep --ctp-* directly. */
+  --ink-rosewater: light-dark(#b3462f, var(--ctp-rosewater));
+  --ink-pink: light-dark(#bb1d91, var(--ctp-pink));
+  --ink-mauve: light-dark(#8635ef, var(--ctp-mauve));
+  --ink-red: light-dark(#d20f39, var(--ctp-red));
+  --ink-peach: light-dark(#b64301, var(--ctp-peach));
+  --ink-yellow: light-dark(#935d13, var(--ctp-yellow));
+  --ink-green: light-dark(#307820, var(--ctp-green));
+  --ink-teal: light-dark(#12747a, var(--ctp-teal));
+  --ink-sapphire: light-dark(#177383, var(--ctp-sapphire));
+  --ink-blue: light-dark(#0c5af4, var(--ctp-blue));
+  --ink-overlay1: light-dark(#65687c, var(--ctp-overlay1));
+  --ink-overlay2: light-dark(#66687b, var(--ctp-overlay2));
 
   /* A single accent, used sparingly */
   --accent: var(--ink-peach);
+
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
   --content-width: 44rem;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto,
@@ -71,118 +71,12 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono",
     Consolas, "Liberation Mono", monospace;
 
-  color-scheme: dark;
+  /* Follows the OS until data-theme is set */
+  color-scheme: light dark;
 }
 
-/* -------------------- Light theme: Catppuccin Latte -------------------- */
-/* Applied when the visitor toggles the theme button (persisted via
-   localStorage), or automatically if the OS prefers light and no
-   explicit choice has been made yet. */
-
-:root[data-theme="light"] {
-  --ctp-rosewater: #dc8a78;
-  --ctp-flamingo: #dd7878;
-  --ctp-pink: #ea76cb;
-  --ctp-mauve: #8839ef;
-  --ctp-red: #d20f39;
-  --ctp-maroon: #e64553;
-  --ctp-peach: #fe640b;
-  --ctp-yellow: #df8e1d;
-  --ctp-green: #40a02b;
-  --ctp-teal: #179299;
-  --ctp-sky: #04a5e5;
-  --ctp-sapphire: #209fb5;
-  --ctp-blue: #1e66f5;
-  --ctp-lavender: #7287fd;
-  --ctp-text: #4c4f69;
-  --ctp-subtext1: #5c5f77;
-  --ctp-subtext0: #6c6f85;
-  --ctp-overlay2: #7c7f93;
-  --ctp-overlay1: #8c8fa1;
-  --ctp-overlay0: #9ca0b0;
-  --ctp-surface2: #acb0be;
-  --ctp-surface1: #bcc0cc;
-  --ctp-surface0: #ccd0da;
-  --ctp-base: #eff1f5;
-  --ctp-mantle: #e6e9ef;
-  --ctp-crust: #dce0e8;
-
-  /* Latte accents, darkened the minimum needed to reach AA */
-  --ink-rosewater: #b3462f;
-  --ink-pink: #bb1d91;
-  --ink-mauve: #8635ef;
-  --ink-red: #d20f39;
-  --ink-peach: #b64301;
-  --ink-yellow: #935d13;
-  --ink-green: #307820;
-  --ink-teal: #12747a;
-  --ink-sapphire: #177383;
-  --ink-blue: #0c5af4;
-  --ink-overlay1: #65687c;
-  --ink-overlay2: #66687b;
-
-  /* subtext0 is 4.37:1 on base, just under AA */
-  --fg-muted: var(--ctp-subtext1);
-  --fg-faint: var(--ctp-subtext1);
-
-  --tag-tint: 14%;
-  --tag-base: #ffffff;
-
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
-    --ctp-rosewater: #dc8a78;
-    --ctp-flamingo: #dd7878;
-    --ctp-pink: #ea76cb;
-    --ctp-mauve: #8839ef;
-    --ctp-red: #d20f39;
-    --ctp-maroon: #e64553;
-    --ctp-peach: #fe640b;
-    --ctp-yellow: #df8e1d;
-    --ctp-green: #40a02b;
-    --ctp-teal: #179299;
-    --ctp-sky: #04a5e5;
-    --ctp-sapphire: #209fb5;
-    --ctp-blue: #1e66f5;
-    --ctp-lavender: #7287fd;
-    --ctp-text: #4c4f69;
-    --ctp-subtext1: #5c5f77;
-    --ctp-subtext0: #6c6f85;
-    --ctp-overlay2: #7c7f93;
-    --ctp-overlay1: #8c8fa1;
-    --ctp-overlay0: #9ca0b0;
-    --ctp-surface2: #acb0be;
-    --ctp-surface1: #bcc0cc;
-    --ctp-surface0: #ccd0da;
-    --ctp-base: #eff1f5;
-    --ctp-mantle: #e6e9ef;
-    --ctp-crust: #dce0e8;
-
-    /* Keep in sync with :root[data-theme="light"] above */
-    --ink-rosewater: #b3462f;
-    --ink-pink: #bb1d91;
-    --ink-mauve: #8635ef;
-    --ink-red: #d20f39;
-    --ink-peach: #b64301;
-    --ink-yellow: #935d13;
-    --ink-green: #307820;
-    --ink-teal: #12747a;
-    --ink-sapphire: #177383;
-    --ink-blue: #0c5af4;
-    --ink-overlay1: #65687c;
-    --ink-overlay2: #66687b;
-
-    --fg-muted: var(--ctp-subtext1);
-    --fg-faint: var(--ctp-subtext1);
-
-    --tag-tint: 14%;
-    --tag-base: #ffffff;
-
-    color-scheme: light;
-  }
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 * {
   box-sizing: border-box;
@@ -203,6 +97,10 @@ body {
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+main {
+  overflow-wrap: break-word;
 }
 
 ::selection {
@@ -308,17 +206,12 @@ a {
   text-decoration-color: var(--border-strong);
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
-  transition: text-decoration-color 0.15s ease, color 0.15s ease,
-    transform 0.1s ease;
+  transition: text-decoration-color 0.15s ease, color 0.15s ease;
 }
 
 a:hover {
   color: var(--accent);
   text-decoration-color: var(--accent);
-}
-
-a:active {
-  transform: scale(0.97);
 }
 
 /* -------------------- Header -------------------- */
@@ -351,6 +244,7 @@ header {
 }
 
 .site-title a {
+  display: inline-block;
   color: var(--fg);
   text-decoration: none;
 }
@@ -413,43 +307,44 @@ nav a {
   color: var(--fg-muted);
   text-decoration: none;
   margin-right: 1.1rem;
-  transition: color 0.15s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-nav a:hover {
-  transform: translateY(-2px) scale(1.08);
-}
-
-nav a:active {
-  transform: scale(0.94);
 }
 
 nav a:nth-child(1):hover { color: var(--ink-blue); }
 nav a:nth-child(2):hover { color: var(--ink-green); }
 nav a:nth-child(3):hover { color: var(--ink-mauve); }
-nav a:nth-child(4):hover { color: var(--ink-peach); }
 
+/* Plain glyph like the nav links */
 .theme-toggle {
   display: inline-block;
-  font-size: 0.95rem;
-  line-height: 1;
-  vertical-align: middle;
-  background: none;
-  border: none;
   padding: 0;
   margin-left: 0.3rem;
+  vertical-align: middle;
+  line-height: 1;
+  background: none;
+  border: none;
   cursor: pointer;
   color: var(--fg-muted);
-  transition: color 0.15s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .theme-toggle:hover {
   color: var(--accent);
-  transform: rotate(15deg) scale(1.2);
 }
 
-.theme-toggle:active {
-  transform: scale(0.9);
+.theme-toggle svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Icon shows the theme you'd switch to */
+[data-theme="dark"] .theme-toggle .icon-moon,
+[data-theme="light"] .theme-toggle .icon-sun {
+  display: none;
+}
+
+/* Without JS there's no data-theme and nothing to toggle */
+:root:not([data-theme]) .theme-toggle {
+  display: none;
 }
 
 /* -------------------- Code -------------------- */
@@ -555,8 +450,6 @@ pre code[class]::before,
   padding: 0.25em 0.6em;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease,
-    transform 0.1s ease;
 }
 
 .code-block:hover .copy-btn,
@@ -566,13 +459,16 @@ pre code[class]::before,
   opacity: 1;
 }
 
+/* No hover on touch screens, so keep it visible */
+@media (hover: none) {
+  .copy-btn {
+    opacity: 1;
+  }
+}
+
 .copy-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-.copy-btn:active {
-  transform: scale(0.94);
 }
 
 .copy-btn.copied {
@@ -705,7 +601,7 @@ th {
     var(--ctp-red)
   );
   background-size: 200% 100%;
-  animation: shimmer 5s linear infinite;
+  animation: shimmer 2.5s ease-in-out;
 }
 
 @keyframes shimmer {
@@ -756,12 +652,10 @@ th {
   font-size: 1.02rem;
   color: var(--fg);
   text-decoration: none;
-  transition: color 0.15s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .post-entry .title:hover {
   color: var(--accent);
-  transform: translateX(4px);
 }
 
 .post-entry .title::after {
@@ -769,7 +663,7 @@ th {
   display: inline-block;
   opacity: 0;
   transform: scale(0) rotate(-45deg);
-  transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: opacity 0.2s ease, transform 0.3s var(--spring);
 }
 
 .post-entry .title:hover::after {
@@ -786,14 +680,23 @@ th {
   margin: -0.4em 0 2.2em;
 }
 
+.post-authors::before {
+  content: "· ";
+}
+
+.post-author + .post-author::before {
+  content: ", ";
+}
+
 .post {
   display: flex;
   flex-direction: column;
 }
 
-/* Drop cap on the opening paragraph of a post — color picked
-   randomly per page load via the script in base.shtml */
-.post-body > p:first-of-type::first-letter {
+/* Drop cap on the opening paragraph of a post, skipping a leading
+   row of tags — color picked randomly per page load in base.shtml */
+.post-body > p:first-of-type:not(:has(> [class^="tag-"]))::first-letter,
+.post-body > p:first-of-type:has(> [class^="tag-"]) + p::first-letter {
   font-family: var(--mono);
   font-size: 3em;
   line-height: 0.8;
@@ -814,7 +717,12 @@ th {
   font-size: 0.85rem;
 }
 
+#prev-next:not(:has(a)) {
+  display: none;
+}
+
 #prev-next a {
+  display: inline-block;
   text-decoration: none;
   color: var(--fg-muted);
 }
@@ -880,6 +788,8 @@ footer {
 }
 
 footer a {
+  display: inline-block;
+  line-height: 1.3;
   color: var(--fg-faint);
   text-decoration: none;
   border-bottom: 1px solid var(--border-strong);
@@ -908,30 +818,29 @@ footer a:hover {
   padding: 0.2em 0.55em;
   margin: 0 0.35em 0.35em 0;
   border-radius: 4px;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--tag-ink);
+  background: light-dark(
+    color-mix(in srgb, var(--tag-ink) 14%, #ffffff),
+    color-mix(in srgb, var(--tag-ink) 16%, var(--ctp-base))
+  );
 }
 
-.tag-blue:hover, .tag-green:hover, .tag-peach:hover, .tag-mauve:hover,
-.tag-teal:hover, .tag-yellow:hover, .tag-pink:hover {
-  transform: scale(1.12) rotate(-3deg);
-}
-
-.tag-blue   { background: color-mix(in srgb, var(--ink-blue)   var(--tag-tint), var(--tag-base)); color: var(--ink-blue); }
-.tag-green  { background: color-mix(in srgb, var(--ink-green)  var(--tag-tint), var(--tag-base)); color: var(--ink-green); }
-.tag-peach  { background: color-mix(in srgb, var(--ink-peach)  var(--tag-tint), var(--tag-base)); color: var(--ink-peach); }
-.tag-mauve  { background: color-mix(in srgb, var(--ink-mauve)  var(--tag-tint), var(--tag-base)); color: var(--ink-mauve); }
-.tag-teal   { background: color-mix(in srgb, var(--ink-teal)   var(--tag-tint), var(--tag-base)); color: var(--ink-teal); }
-.tag-yellow { background: color-mix(in srgb, var(--ink-yellow) var(--tag-tint), var(--tag-base)); color: var(--ink-yellow); }
-.tag-pink   { background: color-mix(in srgb, var(--ink-pink)   var(--tag-tint), var(--tag-base)); color: var(--ink-pink); }
+.tag-blue   { --tag-ink: var(--ink-blue); }
+.tag-green  { --tag-ink: var(--ink-green); }
+.tag-peach  { --tag-ink: var(--ink-peach); }
+.tag-mauve  { --tag-ink: var(--ink-mauve); }
+.tag-teal   { --tag-ink: var(--ink-teal); }
+.tag-yellow { --tag-ink: var(--ink-yellow); }
+.tag-pink   { --tag-ink: var(--ink-pink); }
 
 /* A little pop-in on load so tags and the post list feel less static */
 @media (prefers-reduced-motion: no-preference) {
   .tag-blue, .tag-green, .tag-peach, .tag-mauve, .tag-teal, .tag-yellow, .tag-pink {
-    animation: tag-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation: tag-pop 0.4s var(--spring) backwards;
   }
 
   .post-entry {
-    animation: fade-in-up 0.45s ease both;
+    animation: fade-in-up 0.45s ease backwards;
   }
 
   .post-entry:nth-child(1) { animation-delay: 0.03s; }
@@ -950,6 +859,33 @@ footer a:hover {
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* -------------------- Game feel --------------------
+   Everything pressable moves like the theme toggle: tilts and grows on
+   hover, squashes on press, springs back on release. base.shtml sizes
+   --tilt/--grow/--squash per element so wide things don't swing. */
+
+.site-title a, nav a, .theme-toggle, .post-entry .title, #prev-next a,
+footer a, .cycle-counter, .copy-btn, [class^="tag-"] {
+  transition: color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease,
+    text-decoration-color 0.15s ease, transform 0.2s var(--spring);
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .site-title a:hover, nav a:hover, .theme-toggle:hover, .post-entry .title:hover,
+  #prev-next a:hover, footer a:hover, .cycle-counter:hover, .copy-btn:hover,
+  [class^="tag-"]:hover {
+    transform: rotate(var(--tilt, 3deg)) scale(var(--grow, 1.08));
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .site-title a:active, nav a:active, .theme-toggle:active, .post-entry .title:active,
+  #prev-next a:active, footer a:active, .cycle-counter:active, .copy-btn:active {
+    transform: translateY(2px) scale(var(--squash, 0.9));
+    transition-duration: 0.05s;
+  }
 }
 
 /* -------------------- Click sparks -------------------- */
@@ -1019,10 +955,11 @@ footer a:hover {
 /* -------------------- Cycle counter -------------------- */
 
 .cycle-counter {
+  display: inline-block;
   font-family: var(--mono);
   cursor: pointer;
+  user-select: none;
   border-radius: 4px;
-  transition: color 0.2s ease;
 }
 
 .cycle-counter .led {
@@ -1032,7 +969,6 @@ footer a:hover {
   margin-right: 0.45em;
   border-radius: 50%;
   background-color: var(--ctp-green);
-  animation: led-pulse 1s ease-in-out infinite;
   vertical-align: middle;
   transition: background-color 0.2s ease;
 }
@@ -1044,9 +980,11 @@ footer a:hover {
 }
 
 #cycle-count {
+  display: inline-block;
+  transform-origin: left center;
   font-variant-numeric: tabular-nums;
   color: var(--ink-green);
-  transition: color 0.2s ease;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 
 /* Click the counter for a brief "overclock" — faster ticking,
@@ -1056,16 +994,16 @@ footer a:hover {
   color: var(--ink-peach);
 }
 
+.cycle-counter.overclock #cycle-count {
+  text-shadow: 0 0 8px color-mix(in srgb, var(--ctp-red) 70%, transparent);
+}
+
 .cycle-counter.overclock .led {
   background-color: var(--ctp-red);
   animation: led-pulse 0.2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cycle-counter .led {
-    animation: none;
-  }
-
   .cycle-counter.overclock .led {
     animation: none;
   }
