@@ -1,0 +1,363 @@
+---
+.title = "IPv4 Parsing: Having Your Cake and Eating It Too",
+.description = "A fast IPv4 parser that doesn't read out of bounds.",
+.date = .date("2026-10-13T00:00:00"),
+.authors = ["Giuseppe Cesarano"],
+.layout = "post.shtml",
+.draft = false,
+---
+
+[SWAR]($text.attrs('tag-peach')) [Zig]($text.attrs('tag-mauve')) [SIMD]($text.attrs('tag-blue')) [IPv4]($text.attrs('tag-green'))
+
+# Again?
+
+Once again I got hooked on the deceptively simple problem of parsing IPv4. This time it happened while reading [**192.168.1.1 is too short for SIMD**](https://www.yagiz.co/simd-is-the-wrong-way-to-parse-ipv4). The gist: the fastest parser in his benchmark, [simdzone](https://github.com/NLnetLabs/simdzone)'s `SSE` one, loads 16 bytes at once, but an address can be as short as 7, so unless you can promise some padding at the end of your buffer, it reads out of bounds. Staying in bounds leaves you with a scalar loop, or with `AVX-512` masked loads if your CPU has them. Fast, in bounds, portable: pick two. You can't have your cake and eat it too.
+
+That's when I thought to myself: "wait, I have a parser that doesn't overread!". I'm talking about the one we built in [**The IPv4 Parser AI Couldn't Have Written**]($link.page('blog/the-ipv4-parser-ai-couldnt-have-written/article')). Well... almost: on 7-character addresses it peeks exactly one byte past the end, which I waved away back then as "an acceptable quirk", since that byte is usually a NUL terminator. One byte isn't nine, but it isn't zero either, so let's put it on the to-do list.
+
+When I wrote that article I was happy with how it came out, and I took it for granted that we couldn't beat state-of-the-art SIMD: I even wrote that it was "not as fast as some SIMD implementations". Still, I've never shaken the feeling that it could be simplified further. So could it keep up with SIMD without reading a single byte out of bounds, and without `AVX-512`? Or do we really have to pick?
+
+Today we'll go find out, and since I couldn't stop there, we'll also end up with a riff on my original technique that actually squeezes out even more speed.
+
+## A quick recap of the old parser
+
+Both new parsers are heavily based on the one from my previous post, so to spare you a full read, here's a quick recap of how it works:
+
+1. Load the address into two `u64`: `head` gets the first 8 bytes and `tail` the last 8 (for 7-character addresses, the 8-byte load also picked up the NUL terminator).
+2. Find the `.` positions in each of them and squash them into an index for a lookup table, one table per half.
+3. Use the lookup table entry to shift away the bytes of `tail` that `head` already covers, then `pdep` each half into a fixed layout where every octet gets three lanes, right-aligned: `.1.1` becomes `.  1.  1`.
+4. Look at the hundreds and tens digits of each octet to build yet another index, this time into a table of adjust masks. They tighten the bound of each digit based on the ones before it (`196` is fine, `256` is not), so the whole cascading check fits into a single SWAR operation.
+5. Use SWAR to validate every lane and compute all the octet values at once.
+6. Check that the lanes from the two lookups add up to the input length (otherwise `255.255.255` sneaks through as `255.255.255.255` :)), glue the two halves together, and return the result.
+
+## What did we change?
+
+The adjust logic always felt like a good idea that hadn't reached its best form yet, so the first thing I looked into was how we were computing the adjustment, and it dawned on me...
+
+### Math is hard
+
+I had completely missed one of the hardest concepts in all of math: `(a + b) + c = a + (b + c)`. Hard for me, at least, since I squinted at this code "at least 6 times" without noticing it. Reading my own code back has never made me feel quite this stupid.
+
+Here's how the adjust check looked in the previous post:
+
+```zig
+inline fn parseTwoTripletsHigh(chunk: u64, active_lanes: u64) ParseResult {
+    const d = chunk -% (0x3030302E3030302E & active_lanes);
+
+    const index = pext(d +% 0x007B7E00007B7E00, 0x0080800000808000);
+    const adjust = adjust_lut_high[index];
+
+    const err = (d | (d +% 0x76767D7F76767D7F +% adjust)) & 0x8080808080808080;
+    const compact = d *% 0x640A01;
+
+    return .{ .value = @intCast(pext(compact, 0xFF000000FF000000)), .err = err };
+}
+```
+
+We fetch `adjust` from a lookup table, and then add it to a constant at runtime, on every single parse. All of that could have been folded into the lookup table itself, so each entry already holds the final value:
+
+```zig
+inline fn parseTwoTriplets(comptime half: enum { low, high }, chunk: u64, ascii: u64, lead_ones: u64) ParseResult {
+    const adjust_table, const index_mask, const value_mask = switch (half) {
+        .low => .{ .adjust_low, 0x0000050200000502, 0x00FF000000FF0000 }, // More on index_mask later
+        .high => .{ .adjust_high, 0x0005020000050200, 0xFF000000FF000000 },
+    };
+
+    const d = chunk -% ascii;
+    const dl = d -% lead_ones;
+
+    const index = pextConst(d, index_mask);
+    const adjust = lutAdjust(adjust_table, index);
+
+    const err = dl | (d +% adjust);
+    const compact = d *% 0x640A01;
+
+    return .{ .value = @intCast(pextConst(compact, value_mask)), .err = err & 0x8080808080808080 };
+}
+```
+
+Since the table is built at compile time, the fold costs us nothing at runtime: the parser is left with a single addition. You may also notice that the low and high halves now share one function: a `comptime` switch picks their table and masks, so we get two specialized copies without writing them twice. (Don't mind `pextConst` for now: it's just a `pext`, and we'll get to it.)
+
+And the adjust values weren't the only thing we could fold! The ASCII offsets we subtract from each lane (`0x30` for digits, `0x2E` for dots) only depend on the layout too, so instead of ANDing `0x3030302E3030302E` with the active lanes on every parse, each table entry now stores them already masked: that's the new `ascii` parameter.
+
+The new `dl` line checks for leading `0`s: the old version would happily parse `001.001.001.001` as `1.1.1.1`, but simdzone rejects that form, and so does the fast path Yagiz ships in Ada, which hands anything unusual over to a slower, general parser. So now we reject it too, which means ours could slot right into that role. Each table entry stores `lead_ones`, which has a `1` in the first lane of every octet with more than one digit; subtracting it turns a leading `0` into `0xFF`, whose top bit trips the error check. In my previous post I wrote that rejecting leading zeros "would require extra checks, altering the performance profile"... well, it costs a single subtraction :P
+
+### The new mask
+
+Once I'd caught myself doing pointless work in the adjust logic, I started doubting every other constant in there, starting with the adjust index. In the previous version, to find out which adjustments a triplet needed, we first added `0x7E` to the hundreds lane and `0x7B` to the tens lane, so that a `2` or a `5` (or anything bigger) would spill into the lane's top bit, and then `pext`ed those top bits out: one bit per digit, a 4-bit index, 16 entries.
+
+But we don't really need to ask "is this digit 2 or more?". The range check will reject anything too big anyway, so we only need to tell apart the digits that can actually survive it:
+
+- **Hundreds**: the only valid values are `0`, `1` and `2`, and among those, `2` (`0b010`) is the only one with bit 1 set. So we grab bit 1: `0x02`.
+- **Tens**: we only care whether it's a `5` when the hundreds is a `2`, and in that case it can't be more than `5`. Among `0` to `5`, only `5` (`0b101`) has both bit 0 and bit 2 set. So we grab those two: `0x05`.
+
+Put those together for both triplets and you get `0x0000050200000502` (the high half's mask is the same thing shifted by one lane, since its layout starts with a dot). `pext` packs the 3 bits of each triplet into a 6-bit index, and the lookup table, now 64 entries, maps it straight to the adjust value.
+
+What about digits the mask misreads? A `3` in the hundreds also has bit 1 set, and a `7` in the tens looks like a `5`, but that only matters when the hundreds is a `2`, and `27x` is out of range anyway. In both cases the triplet is invalid, and the range check rejects it no matter which adjustment we pick. A slightly bigger table buys us one less addition on every parse!
+
+### Smarter hashing
+
+The adjust index wasn't the only one we were overcomplicating. This is the code we were using to build the other one, the one from step 2:
+
+```zig
+inline fn hash(data: u64) usize {
+    var h = data ^ 0x2E2E2E2E2E2E2E2E;
+    h -%= 0x0101010101010101;
+    return @intCast(pext(h, 0x0080808080808000));
+}
+```
+
+Once again, almost the same logic applies: why go hunting for the dots when we can just pick the digits? Look at bit 4 of our characters:
+
+```
+'.' = 0x2E = 0b0010_1110
+'0' = 0x30 = 0b0011_0000
+...
+'9' = 0x39 = 0b0011_1001
+```
+
+Every digit has it set, and the dot doesn't! So bit 4 of each lane already tells us whether it holds a dot, no XOR or subtraction needed, and our hash becomes a single `pext`:
+
+```zig
+inline fn hash(data: u64) usize {
+    return @intCast(pextConst(data, 0x0010101010101000));
+}
+```
+
+The catch is that we now get the inverse of the dot mask: a `1` marks a digit, not a dot. That's easily fixed at compile time: when building the lookup tables, we store the entry for dot mask `m` at index `m ^ 63` instead, leaving us with less work at runtime.
+
+### Last touch-ups!
+
+Just like in my previous post, now we go check the assembly and start picking it apart. This phase is quite iterative: we keep looping until the generated code is as slim as it gets.
+
+Some things that surfaced while doing that:
+
+1. **One table to rule them all**: all the lookup tables now live in a single contiguous block of memory, so the compiler loads one base address and reaches every table through a constant offset. On top of that, each entry packs everything an index needs (`pdep` mask, `ascii` offsets, `lead_ones` and `len`) into 32 bytes, so a lookup touches a single cache line.
+2. **Constant masks from memory**: all our `pext` masks are constants, but `pext` can't take an immediate, so each mask first gets loaded into a register with a `movabs`. Putting the masks in `.rodata` and pointing `pext` straight at them (that's what `pextConst` does) saves us an instruction on every `pext`.
+3. **Double-duty lengths**: lengths are now stored in bits, so the high table's `len` is both the shift that right-aligns `tail` and its share of the length check, which shrank to a subtraction and an XOR, ORed with the two error masks into one final branch.
+4. **No more NUL**: remember that one byte from the intro? The parser now takes a plain slice and reads exactly that. 7-character addresses go through a cold path that copies them, so the input doesn't even need to be NUL-terminated anymore!
+
+## So is it fast?
+
+```
+info: Parsing 1500000 random IPs 64 times (1274.88MB)
+info: bmi (len given)            4.71 ns/ip   2.82 GB/s
+info: simdzone (overreads)       4.75 ns/ip   2.79 GB/s
+```
+
+Well... it's a tie. Run it a few times and the two keep trading places by a hair: even just shifting where the code lands in the binary is enough to flip them. So past me was right, we didn't beat state-of-the-art SIMD, but we did match it with plain scalar code, without peeking a single byte past the end, and I'll happily take that. Still, past me also didn't know about associativity, so maybe don't trust him too much :P
+
+To be fair, we're cheating a bit... well, everybody is: we get the length served on a silver platter, while simdzone has to find it by itself, but it gets to peek past the end of the buffer to do so, and we don't.
+
+We'll come back to the fact that these are two slightly different routines later; for now, two more pressing questions were haunting me: how the heck is a scalar parser keeping up with SIMD? And why the heck isn't it faster?
+
+Collecting some perf stats on both implementations quickly revealed the answers. To the first one: even though we run about 8% more instructions per IP, our head and tail chains are independent, so the CPU can work on both at once, while simdzone's work is one long chain where every step waits for the previous one. simdzone spends about 6 cycles per IP with only one or two execution ports busy, we spend about 3, and we end up with around 10% more instructions per cycle.
+
+As for the second one: no execution unit is actually maxed out, not even port 1, where every `pext`, `pdep` and multiplication has to go. What holds us back is the length of the chains themselves: each half goes through two `pext`s, a `pdep` and two table lookups, one after the other, before we know whether the input is valid, and for about a quarter of the cycles the CPU can't even take in new instructions, because its buffers are full of ones waiting for their inputs...
+
+Honestly, when I wrote the first parser I always wished I had a SIMD shuffle for the second part of the algorithm, since it would solve a lot of things with a single instruction and definitely shorten our dependency chains. So what if, at this point, we drop the no-SIMD constraint?
+
+## Single Instructions Multiple Desserts
+
+As I said, the part I really wanted SIMD for is the second half of the parser, so loading the address and hashing it stay almost the same as in the BMI-only version:
+
+```zig
+var head: u64 = undefined;
+var tail: u64 = undefined;
+var head_tail: U8x16 = undefined;
+
+// also the tail offset, so the range check stays a lea and a cmp
+const tail_offset = address.len -% 8;
+if (tail_offset > 7) {
+    @branchHint(.cold);
+    if (address.len != 7) return error.Invalid;
+
+    head = 0;
+    @memcpy(std.mem.asBytes(&head)[0..7], address[0..7]);
+    tail = head << 8;
+    head_tail = @bitCast([2]u64{ head, tail });
+} else {
+    @memcpy(std.mem.asBytes(&head), address[0..8]);
+    @memcpy(std.mem.asBytes(&tail), (address.ptr + tail_offset)[0..8]);
+
+    // from memory: moving head and tail over costs 3 port 5 uops
+    head_tail = @bitCast(@shuffle(u64, loadq(address.ptr), broadcastAt(address.ptr, tail_offset), [2]i32{ 0, -2 }));
+}
+
+// bit 4 is clear for '.' and set for digits
+const digit_bits = 0x0010101010101000;
+const index_low: usize = @intCast(pextConst(head, digit_bits));
+const index_high: usize = @intCast(pextConst(tail, digit_bits));
+```
+
+The new guest is `head_tail`, a `U8x16`: a 16-byte vector holding `head` in its first 8 bytes and `tail` in the last 8, which is everything our shuffle will pick from later. And no, we didn't just sneak the overread back in: it's built from the very same two 8-byte reads, the first and last 8 characters, they just end up side by side. Also, unlike before, `tail` doesn't get shifted anymore: the shuffle can grab its bytes wherever they are.
+
+Both branches of the `if` build the same `head_tail`. The cold one does it the obvious way, but in the hot one `head` and `tail` already sit in general-purpose registers, since `pext` needs them there, and moving them into a vector register costs 3 instructions on port 5, which is exactly where every shuffle has to go. Reading the same bytes again turns out cheaper: they're still in L1, and loads have their own ports. `loadq` puts `head` in the low half of a vector, `broadcastAt` puts `tail` in both halves of another, and the `@shuffle` takes the first half of one and the second half of the other, which compiles down to a single blend.
+
+From here on, though, things start to diverge: both what the lookup table holds and everything we do with it are new:
+
+```zig
+const pattern = interleave(lut.get(.pattern_low, index_low), lut.get(.pattern_high, index_high));
+const sub = interleave(lut.get(.sub_low, index_low), lut.get(.sub_high, index_high));
+
+// saturates to 0 for the dots
+const limit = @as(U8x16, @splat(9)) -| sub;
+
+const lanes = pshufb(head_tail -% @as(U8x16, @splat('0')), pattern);
+const bad_lanes = (lanes -% sub) -| limit;
+
+const positional_values: U8x16 = @bitCast([16]i8{ 10, 1, 10, 1, 10, 1, 10, 1, 100, 0, 100, 0, 100, 0, 100, 0 });
+const products = pmaddubsw(lanes, positional_values);
+const hundreds = @shuffle(u16, products, undefined, [8]i32{ 4, 5, 6, 7, undefined, undefined, undefined, undefined });
+const sums = products +% hundreds;
+```
+
+Each lookup now gives us two vectors: a `pattern` for the shuffle and a `sub` for the validation. Before walking through the algorithm step by step with `192.168.1.1`, I want to explain what `pmaddubsw` does, since it's the reason behind the weirdest part of the whole thing: the way we shuffle the digits around.
+
+`pmaddubsw` is quite a mouthful, but what it does is simple: it takes two 16-byte vectors, multiplies them byte by byte, and adds each pair of neighbouring products into a 16-bit result, so we get 8 of them:
+
+```
+result[0] = a[0]  * b[0]  + a[1]  * b[1]
+result[1] = a[2]  * b[2]  + a[3]  * b[3]
+...
+result[7] = a[14] * b[14] + a[15] * b[15]
+```
+
+So if a pair of bytes holds the tens and ones digits of an octet, and their weights are `10` and `1`, out comes `10 * tens + ones`: almost a whole octet in a single instruction! The catch is that `pmaddubsw` only adds up pairs, and an octet can have three digits. So the hundreds get a pair of their own, in the other half of the vector, with a weight of `100`. The other byte of that pair gets a weight of `0`, so whatever sits there doesn't count, which makes it the perfect spot for the dot that follows the octet: we need to validate it anyway. That gives us this layout:
+
+```
+lane:        0   1   2   3   4   5   6   7     8   9  10  11  12  13  14  15
+holds:      Ta  Oa  Tb  Ob  Tc  Oc  Td  Od    Ha   .  Hb   .  Hc   .  Hd   -
+weight:     10   1  10   1  10   1  10   1   100   0 100   0 100   0 100   0
+```
+
+`Ta`, `Oa` and `Ha` are the tens, ones and hundreds of octet `a`, and so on. `d` has no dot after it, so lane 15 stays empty.
+
+Look at the layout again: octets `a` and `b`, which `head` covers, only use lanes 0-3 and 8-11, and `c` and `d`, which `tail` covers, only use lanes 4-7 and 12-15. So each half's table entry only stores the 8 lanes it owns, a single `u64`, and `interleave` stitches the two back together into the full 16-lane `pattern` and `sub`.
+
+Now our example. `192.168.1.1` is 11 characters long, so `head` gets the first 8 and `tail` the last 8, with the middle 5 showing up in both:
+
+```
+byte:        0   1   2   3   4   5   6   7     8   9  10  11  12  13  14  15
+head_tail:   1   9   2   .   1   6   8   .     .   1   6   8   .   1   .   1
+```
+
+That's what we have. What we want is our layout, filled in with the digits of `192.168.1.1`:
+
+```
+lane:        0   1   2   3   4   5   6   7     8   9  10  11  12  13  14  15
+holds:      Ta  Oa  Tb  Ob  Tc  Oc  Td  Od    Ha   .  Hb   .  Hc   .  Hd   -
+want:        9   2   6   8   0   1   0   1     1   .   1   .   0   .   0   0
+```
+
+`c` and `d` are a single digit each, so their tens and hundreds are just `0`, and so is lane 15, since no dot follows `d`.
+
+Getting from one to the other is exactly what `pshufb` does: for every lane, it takes the index `pattern` holds for that lane and copies that byte of `head_tail` over, or writes a `0` if the index has its top bit set (the `-` below). So `pattern` simply says, lane by lane, where each byte we want sits in what we have:
+
+```
+lane:        0   1   2   3   4   5   6   7     8   9  10  11  12  13  14  15
+want:        9   2   6   8   0   1   0   1     1   .   1   .   0   .   0   0
+pattern:     1   2   5   6   -  13   -  15     0   3   4   7   -  14   -   -
+```
+
+The tens of `a`, the `9`, is byte 1 of `head_tail`, its ones byte 2, the lone `1` of `c` is byte 13, and the empty lanes get a `-`.
+
+Right before the shuffle, we subtract `'0'` from every byte of `head_tail`, so digits become their actual values and dots become `0xFE` (`'.' - '0'` wraps around). Doing it before rather than after matters: the empty lanes stay a clean `0`, which is exactly the value a missing digit should have. So what we end up with is our `want`, with real numbers in it:
+
+```
+lane:        0   1   2   3   4   5   6   7     8   9  10  11  12  13  14  15
+holds:      Ta  Oa  Tb  Ob  Tc  Oc  Td  Od    Ha   .  Hb   .  Hc   .  Hd   -
+lanes:       9   2   6   8   0   1   0   1     1  FE   1  FE   0  FE   0   0
+```
+
+Now the validation, which is where `sub` comes in. Here it is right under our lanes:
+
+```
+holds:      Ta  Oa  Tb  Ob  Tc  Oc  Td  Od    Ha   .  Hb   .  Hc   .  Hd   -
+lanes:       9   2   6   8   0   1   0   1     1  FE   1  FE   0  FE   0   0
+sub:         0   0   0   0   0   0   0   0     1  FE   1  FE   0  FE   0   0
+```
+
+A lane passes when `lane - sub` is at most `9 -| sub`: then `(lane - sub) -| (9 -| sub)` comes out `0`, otherwise it doesn't (`-|` is a saturating subtraction: it stops at `0` instead of wrapping around). Picking `sub` per lane gives us three checks for the price of one:
+
+- `sub = 0`: any digit, `0` to `9`.
+- `sub = 1`: only `1` to `9`. That's the first digit of every 2- or 3-digit octet, and there go our leading zeros.
+- `sub = 0xFE`: the limit saturates to `0`, so the lane has to be exactly `0xFE`, a dot.
+
+Anything else, be it a letter, a space, or a dot where a digit should be, lands out of range, and its lane in `bad_lanes` ends up non-zero. For our example every lane checks out, so `bad_lanes` is all zeros.
+
+Last, the values. `pmaddubsw` multiplies every lane by its weight and adds up each pair: the tens and ones give us the first 4 results, the hundreds the last 4, with the dots multiplied away by their `0`s:
+
+```
+holds:      Ta  Oa  Tb  Ob  Tc  Oc  Td  Od    Ha   .  Hb   .  Hc   .  Hd   -
+lanes:       9   2   6   8   0   1   0   1     1  FE   1  FE   0  FE   0   0
+weight:     10   1  10   1  10   1  10   1   100   0 100   0 100   0 100   0
+products:       92      68       1       1       100     100       0       0
+```
+
+The `hundreds` shuffle moves the last 4 results down, and one addition later `sums` holds all four octets:
+
+```
+products:       92      68       1       1       100     100       0       0
+hundreds:      100     100       0       0
+sums:          192     168       1       1
+```
+
+All that's left is the actual checks, and cutting the vector down to its bottom part:
+
+```zig
+const high_bytes: @Vector(8, u16) = .{ 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0, 0, 0, 0 };
+const too_big: U8x16 = @bitCast(sums & high_bytes);
+
+// separate ifs, or LLVM keeps the vptest flag around with setne
+if (address.len -% lut.get(.len_low, index_low) != lut.get(.len_high, index_high)) return error.Invalid;
+if (anyNonZero(bad_lanes | too_big)) {
+    @branchHint(.unlikely);
+    return error.Invalid;
+}
+
+const octets: @Vector(8, u8) = @truncate(sums);
+return @truncate(@as(u64, @bitCast(octets)));
+```
+
+`sums` can go up to 999, but an octet can't go past 255, and anything bigger needs at least one bit in the high byte of its `u16`. So `too_big` keeps just those high bytes, and later we check whether any of them is non-zero.
+
+The length check is the same one from the BMI-only parser: each half's entry knows how many characters it covers, `A.B.` for `head` and `C.D` for `tail`, and the two have to add up to the length of the address.
+
+Finally, once `too_big` has passed, every octet fits in a byte, so the first `@truncate` keeps the low byte of each `u16`, packing the 8 lanes into 8 bytes. We reinterpret those as a `u64`, and the second `@truncate` keeps the first 4: `a`, `b`, `c` and `d`, in order. And there's our `192.168.1.1`!
+
+As I've said more than once, a lot of this code comes from staring at the assembly and asking "why did the compiler do that?". Some of the answers are pretty counterintuitive, like those two separate `if`s, but they're just there to babysit LLVM, so I won't go through them here. Turns out LLVM is about as good as I am at spotting the obvious when it's hidden behind a bit of math, and we've seen how that went :P
+
+## Can you just give me the numbers? 
+
+Soooooo, was it worth it?
+
+```
+❯ taskset -c 3 zig build benchmark
+info: Parsing 1500000 random IPs 64 times (1274.88MB)
+info: bmi (len given)            4.77 ns/ip   2.78 GB/s
+info: simdzone (overreads)       4.73 ns/ip   2.81 GB/s
+info: hybrid (len given)         3.48 ns/ip   3.82 GB/s
+info: --- no length, no overread ---
+info: hybrid + strlen            5.58 ns/ip   2.38 GB/s
+info: simdzone + memcpy         16.24 ns/ip   0.82 GB/s
+info: simdzone + strlen, regs    8.84 ns/ip   1.50 GB/s
+```
+
+Well, we're a whole GB/s faster!! And this time it's not a matter of code layout or lucky runs: that's over a nanosecond per address.
+
+The second half of the benchmark puts the parsers on equal footing: nobody gets the length handed to them, and nobody gets to read past the end, so everyone has to find the length first. `simdzone + memcpy` is the straightforward way to make simdzone safe: copy the address into a zero-padded 16-byte buffer and parse that. `simdzone + strlen, regs` isn't simdzone's official code, it's mine: it borrows our loading trick, reading the first and last 8 bytes and gluing them together, to build that padded buffer without a `memcpy` :3
+
+To be fair, our parser has two downsides compared to simdzone's. First, our lookup table is about 600 bytes bigger: 2176 vs 1552 bytes. Second, those pesky AMD Zen 1 and Zen 2 CPUs run `pext` in microcode, which makes it painfully slow, it's fixable but more on that later.
+
+## Conclusions
+
+To my knowledge, the hybrid is the fastest IPv4 parser out there on x86... well, once you hand it the length :P Yes, my i7-7700K can't run the `AVX-512` parser from Yagiz's post, so I couldn't race the two directly, but on his own Xeon it took 4.5 ns per address against simdzone's 3.1, and we just beat simdzone by over a nanosecond. I'm not too worried, but if your CPU has `AVX-512`, prove me wrong!
+
+Speaking of CPUs, I owe you an honest look at the third slice of the cake: portability. The hybrid won't run anywhere but x86, and the only thing it really needs is `AVX2`: `pext` just hashes `head` and `tail`, and a good old multiply-and-shift hash, like the one from my first post, could take its place, that would rescue Zen 1 and Zen 2, but on my CPU it costs about 12%, so they stay slow because I want them to be. AMD should have known better >:( So yes, you can have your cake and eat it too, as long as your oven has `AVX2`, which has been around since 2013 and is a far easier recipe to come by than `AVX-512`.
+
+This also kinda shows how much a random challenge can teach you. If I hadn't set myself the arbitrary rule of not using SIMD in my first version, I would never have come up with this one, which I feel is a far bigger contribution. Look at where the hybrid comes from: the two 8-byte reads that keep it in bounds, hashing `head` and `tail` on their own, table entries that only cover their own half... all of it started as a workaround for not having vectors. Had I reached for SIMD from the start, I'd probably have loaded 16 bytes like everybody else, and walked straight into the overread this whole post is about. In my first post I wrote that constraints aren't just hurdles but part of the solution; turns out they can be part of the next one too, even after you drop them.
+
+Now if you'll excuse me, I have some cake to eat.
+
+[Link To The Code]($link.url("https://github.com/GiuseppeCesarano/extractingcycles/tree/master/content/blog/ipv4-parsing-having-your-cake-and-eating-it-too").new(true))
