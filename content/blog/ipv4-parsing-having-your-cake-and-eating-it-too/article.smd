@@ -233,7 +233,7 @@ weight:     10   1  10   1  10   1  10   1   100   0 100   0 100   0 100   0
 
 `Ta`, `Oa` and `Ha` are the tens, ones and hundreds of octet `a`, and so on. `d` has no dot after it, so lane 15 stays empty.
 
-This layout isn't mine, though: it's the one Wojciech Muła came up with in [**SIMD-ized faster parse of IPv4 addresses**](https://0x80.pl/notesen/2023-04-09-faster-parse-ipv4.html), weights included. What we changed is what goes in the zero-weight bytes: he keeps the leading digit of each octet there, to check for leading zeros, while we park the dots there, so they get validated in the same pass as the digits.
+This layout isn't mine, though: it's the one Wojciech Muła came up with in [**SIMD-ized faster parse of IPv4 addresses**](http://0x80.pl/notesen/2023-04-09-faster-parse-ipv4.html), weights included. What we changed is what goes in the zero-weight bytes: he keeps the leading digit of each octet there, to check for leading zeros, while we park the dots there, so they get validated in the same pass as the digits.
 
 Look at the layout again: octets `a` and `b`, which `head` covers, only use lanes 0-3 and 8-11, and `c` and `d`, which `tail` covers, only use lanes 4-7 and 12-15. So each half's table entry only stores the 8 lanes it owns, a single `u64`, and `interleave` stitches the two back together into the full 16-lane `pattern` and `sub`.
 
