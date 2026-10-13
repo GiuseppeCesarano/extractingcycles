@@ -1,14 +1,19 @@
 ---
-.title = "Home",
-.description = "SWAR tricks, bit-twiddling and cache-friendly layouts — a blog about the road to fast code, not just the benchmark at the end.",
+.title = "Low-Level Performance, One Wrong Turn at a Time",
+.description = "SWAR tricks, bit-twiddling and cache-friendly layouts: a blog about the road to fast code, not just the benchmark at the end.",
 .date = .date("2026-06-14T00:00:00"),
 .authors = ["Giuseppe Cesarano"],
-.layout = "page.shtml",
+.layout = "home.shtml",
+.alternatives = [.{
+    .name = "sitemap",
+    .layout = "sitemap.xml",
+    .output = "sitemap.xml",
+}],
 .draft = false,
 ---
 
-[The destination is fast code. This blog is about the road there.]($text.attrs('lede'))
+[Fast code is the destination. This blog is about the road there.]($text.attrs('lede'))
 
-This blog isn't really about fast code, it's about how we got there.  
+SWAR tricks, bit-twiddling, SIMD, branch-killing, cache-friendly layouts... the final benchmark is rarely the interesting part. The wrong turns are. The dead ends, the small intuitions, and those _"wait, why does THIS make it faster?!"_ moments along the way.
 
-SWAR tricks, bit-twiddling, branch-killing, cache-friendly layouts — the interesting part is rarely the final benchmark or the code itself. It's the wrong turns, dead ends, small intuitions, and the _"wait, why does THIS make it faster"_ moments along the way.
+Pick a post below, and if you think my benchmark is wrong, [tell me]($link.page('about')), I'd genuinely love that :P

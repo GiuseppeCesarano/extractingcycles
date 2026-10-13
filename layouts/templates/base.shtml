@@ -3,8 +3,13 @@
 	<head id="head">
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title :text="$page.title.suffix(' — ', $site.title)"></title>
+		<title :text="$page.title.suffix(' | ', $site.title)"></title>
 		<meta name="description" content="$page.description">
+		<link rel="canonical" href="$site.host_url.addPath($page.link())">
+		<meta property="og:site_name" content="$site.title">
+		<meta property="og:title" content="$page.title">
+		<meta property="og:description" content="$page.description">
+		<meta property="og:url" content="$site.host_url.addPath($page.link())">
 		<meta name="theme-color" id="theme-color-meta" content="#24273a">
 		<script>
 			(function () {
@@ -20,7 +25,8 @@
 				document.getElementById("theme-color-meta").setAttribute("content", THEME_COLORS[theme]);
 			})();
 		</script>
-		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%80%3C/text%3E%3C/svg%3E">
+		<link rel="icon" href="$site.asset('favicon.ico').link()" sizes="32x32">
+		<link rel="icon" href="$site.asset('favicon.svg').link()" type="image/svg+xml">
 		<link type="text/css" rel="stylesheet" href="$site.asset('style.css').link()">
 		<link type="text/css" rel="stylesheet" href="$site.asset('highlight.css').link()">
 		<link rel="alternate" type="application/rss+xml" title="$site.title" href="$site.page('blog').alternative('rss').link()">
@@ -59,7 +65,7 @@
 			</div>
 			<div class="footer-row">
 				<span class="build-flags" id="quip"></span>
-				<span class="cycle-counter" aria-hidden="true" title="not a real metric — just a little odometer that ticks up while this tab is open. click for a boost.">
+				<span class="cycle-counter" aria-hidden="true" title="not a real metric, just a little odometer that ticks up while this tab is open. click for a boost.">
 					<span class="led"></span>cycles burned: <span id="cycle-count">0</span>
 				</span>
 			</div>
@@ -227,7 +233,7 @@
 					});
 
 					// On load: rev up from 0 to the starting value, then idle
-					// normally. One-shot — doesn't repeat while reading.
+					// normally. One-shot, doesn't repeat while reading.
 					if (!reducedMotion) {
 						if (cycleCounter) cycleCounter.classList.add("overclock");
 						var step = Math.ceil(targetCount / 24);
@@ -319,7 +325,7 @@
 				});
 
 				// ---- Page-open intro. Runs once, settles within ~1s, then
-				// the page goes quiet — no ongoing ambient effects while
+				// the page goes quiet: no ongoing ambient effects while
 				// someone is actually reading.
 				if (!reducedMotion) {
 					// Progress bar does a quick full sweep, then settles back

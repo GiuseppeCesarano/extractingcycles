@@ -7,6 +7,9 @@
     .assets_dir_path = "assets",
     .static_assets = [
         "Temml.woff2",
+        "robots.txt",
+        "favicon.ico",
+        "favicon.svg",
     ],
 }),
 .supermd = .{

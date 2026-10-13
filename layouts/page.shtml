@@ -1,5 +1,6 @@
 <extend template="base.shtml">
 <head id="head">
+	<meta property="og:type" content="website">
 </head>
 <main id="main">
 	<h1 :text="$page.title"></h1>

@@ -383,7 +383,7 @@ pre {
   margin: 0;
 }
 
-/* On wide viewports, let code blocks spill past the prose column —
+/* On wide viewports, let code blocks spill past the prose column:
    reading width stays comfortable but code gets room to stretch. */
 @media (min-width: 64rem) {
   pre,
@@ -658,6 +658,12 @@ th {
   color: var(--accent);
 }
 
+.post-entry .summary {
+  margin: 0.35em 0 0;
+  font-size: 0.92rem;
+  color: var(--fg-faint);
+}
+
 .post-entry .title::after {
   content: " \26a1";
   display: inline-block;
@@ -694,9 +700,10 @@ th {
 }
 
 /* Drop cap on the opening paragraph of a post, skipping a leading
-   row of tags — color picked randomly per page load in base.shtml */
+   row of tags and an update note, color picked randomly per page load in base.shtml */
 .post-body > p:first-of-type:not(:has(> [class^="tag-"]))::first-letter,
-.post-body > p:first-of-type:has(> [class^="tag-"]) + p::first-letter {
+.post-body > p:first-of-type:has(> [class^="tag-"]) + p::first-letter,
+.post-body > p:first-of-type:has(> [class^="tag-"]) + blockquote + p::first-letter {
   font-family: var(--mono);
   font-size: 3em;
   line-height: 0.8;
@@ -807,7 +814,7 @@ footer a:hover {
 
 /* -------------------- Tags --------------------
    Each is a single, self-contained class so it works with
-   $text.attrs('tag-blue') — $text.attrs() takes one identifier,
+   $text.attrs('tag-blue'): $text.attrs() takes one identifier,
    not a space-separated class list. */
 
 .tag-blue, .tag-green, .tag-peach, .tag-mauve, .tag-teal, .tag-yellow, .tag-pink {
@@ -987,7 +994,7 @@ footer a, .cycle-counter, .copy-btn, [class^="tag-"] {
   transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 
-/* Click the counter for a brief "overclock" — faster ticking,
+/* Click the counter for a brief "overclock": faster ticking,
    hotter colors, faster LED. Purely cosmetic. */
 .cycle-counter.overclock,
 .cycle-counter.overclock #cycle-count {

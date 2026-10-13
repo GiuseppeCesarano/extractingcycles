@@ -1,13 +1,17 @@
 <extend template="base.shtml">
 <head id="head">
+	<meta property="og:type" content="website">
 </head>
 <main id="main">
 	<h1 :text="$page.title"></h1>
 	<div :html="$page.content()"></div>
 	<div class="post-list">
-		<div class="post-entry" :loop="$page.subpages()">
-			<span class="date" :text="$loop.it.date.format('2006-01-02')"></span>
-			<a class="title" href="$loop.it.link()" :text="$loop.it.title"></a>
-		</div>
+		<ctx :loop="$page.subpages()">
+			<div class="post-entry">
+				<span class="date" :text="$loop.it.date.format('2006-01-02')"></span>
+				<a class="title" href="$loop.it.link()" :text="$loop.it.title"></a>
+				<p class="summary" :text="$loop.it.description"></p>
+			</div>
+		</ctx>
 	</div>
 </main>

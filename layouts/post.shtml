@@ -1,5 +1,6 @@
 <extend template="base.shtml">
 <head id="head">
+	<meta property="og:type" content="article">
 </head>
 <main id="main">
 	<article class="post">

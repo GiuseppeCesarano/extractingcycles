@@ -9,6 +9,8 @@
 
 [SWAR]($text.attrs('tag-peach')) [Zig]($text.attrs('tag-mauve')) [AI]($text.attrs('tag-teal')) [IPv4]($text.attrs('tag-green'))
 
+> **Update:** there's a sequel! In [**IPv4 Parsing: Having Your Cake and Eating It Too**]($link.page('blog/ipv4-parsing-having-your-cake-and-eating-it-too/article')) I try to keep up with SIMD without reading a single byte out of bounds.
+
 I was reading Daniel Lemire's blog, which I highly recommend; specifically:
 [Parsing IP addresses quickly (portably, without SIMD magic)](https://lemire.me/blog/2025/12/27/parsing-ip-addresses-quickly-portably-without-simd-magic/).
 
