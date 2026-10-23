@@ -22,13 +22,13 @@ Expected output, on an i7-7700K:
 
 ```
 info: Parsing 1500000 random IPs 64 times (1274.88MB)
-info: bmi (len given)            4.77 ns/ip   2.78 GB/s
-info: simdzone (overreads)       4.73 ns/ip   2.81 GB/s
-info: hybrid (len given)         3.48 ns/ip   3.82 GB/s
+info: bmi (len given)            4.35 ns/ip   3.05 GB/s
+info: simdzone (overreads)       4.76 ns/ip   2.79 GB/s
+info: hybrid (len given)         3.30 ns/ip   4.03 GB/s
 info: --- no length, no overread ---
-info: hybrid + strlen            5.58 ns/ip   2.38 GB/s
-info: simdzone + memcpy         16.24 ns/ip   0.82 GB/s
-info: simdzone + strlen, regs    8.84 ns/ip   1.50 GB/s
+info: hybrid + strlen            5.64 ns/ip   2.35 GB/s
+info: simdzone + memcpy         16.34 ns/ip   0.81 GB/s
+info: simdzone + strlen, regs    8.83 ns/ip   1.50 GB/s
 ```
 
 Code layout alone can move a row by a few tenths of a nanosecond between builds, so run it a few times before reading too much into small gaps.

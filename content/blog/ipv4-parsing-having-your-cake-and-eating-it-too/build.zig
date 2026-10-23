@@ -44,6 +44,6 @@ fn parsersModule(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.
         },
     });
     // includes simdzoneIp4.c
-    module.addCSourceFile(.{ .file = b.path("simdzoneRegs.c"), .flags = &.{"-O3"} });
+    module.addCSourceFile(.{ .file = b.path("simdzoneRegs.c"), .flags = &.{ "-O3", "-falign-functions=128" } });
     return module;
 }

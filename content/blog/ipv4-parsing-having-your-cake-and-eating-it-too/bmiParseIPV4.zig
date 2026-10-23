@@ -1,229 +1,249 @@
 const std = @import("std");
 
-fn MaskSymbol(comptime mask: u64) type {
-    return struct {
-        const name = std.fmt.comptimePrint("ipv4_pext_mask_{x}", .{mask});
-        const value: u64 = mask;
-        comptime {
-            @export(&value, .{ .name = name });
-        }
-    };
-}
+extern fn @"llvm.x86.bmi.pdep.64"(u64, u64) u64;
+const pdep = @"llvm.x86.bmi.pdep.64";
 
-inline fn pextConst(input: u64, comptime mask: u64) u64 {
-    return asm ("pextq " ++ MaskSymbol(mask).name ++ "(%%rip), %[src], %[dst]"
+inline fn pext(input: u64, comptime mask: u64) u64 {
+    return asm ("pextq %[mask:P](%%rip), %[src], %[dst]"
         : [dst] "=r" (-> u64),
         : [src] "r" (input),
+          [mask] "i" (&mask),
     );
 }
 
-inline fn pdep(input: u64, mask: u64) u64 {
-    var ret: u64 = undefined;
-    asm volatile ("pdepq %[mask], %[src], %[dst]"
-        : [dst] "=r" (ret),
-        : [src] "r" (input),
-          [mask] "r" (mask),
-    );
-    return ret;
-}
+// An address is 7-15 chars, so its first 8 chars (head) always hold "A.B." and its last 8 (tail) always hold ".C.D":
+// the table has a low half indexed by the head and a high half indexed by the tail. The pext masks keep only bits that
+// tell digits from dots, so each half's index says where its dots are: 9 shapes (1-3 digits per octet) among 32 indices.
+// An entry is 32 B: a pdep mask spreading the chars over fixed lanes (hundreds, tens, ones, dot per octet), the ascii
+// subtracted from them, the per-lane minimum (one more on leading digits, to reject leading zeros) and the half's len.
+// The parser requires the two lens to differ by 8 * address.len, so a read that isn't a real entry gets rejected. That
+// lets the halves overlap and keeps the table small. After the entries, one adjust table per half caps each digit.
+const Table = struct {
+    const entries_per_half = 32;
 
-const ParseResult = struct { value: u32, err: u64 };
+    starts: [2]usize,
+    adjust_starts: [2]usize,
+    slots: []align(64) const u64,
 
-fn adjustTable(limits: u64, h_lane: u6) [64]u64 {
-    var out: [64]u64 = undefined;
-    for (&out, 0..) |*o, i| {
-        var adjust: u64 = 0;
-        for (0..2) |k| {
-            const bits = i >> (3 * k);
-            const base = 32 * k + 8 * h_lane;
-            if (bits & 1 != 0) adjust |= @as(u64, 4) << (base + 8);
-            if (bits & 7 == 7) adjust |= @as(u64, 4) << (base + 16);
-        }
-        o.* = adjust +% limits;
-    }
-    return out;
-}
+    // bits 6 and 7 of char 0 are always clear, so the index comes out times 4 for the 32-byte entries
+    const head_digit_bits = 0x00101010100010C0;
+    const tail_digit_bits = 0x00100010101010C0;
 
-inline fn parseTwoTriplets(comptime half: enum { low, high }, chunk: u64, ascii: u64, lead_ones: u64) ParseResult {
-    const adjust_table, const index_mask, const value_mask = switch (half) {
-        .low => .{ .adjust_low, 0x0000050200000502, 0x00FF000000FF0000 },
-        .high => .{ .adjust_high, 0x0005020000050200, 0xFF000000FF000000 },
-    };
+    const Half = enum { high, low };
+    const Entry = extern struct { lanes: u64 = 0, ascii: u64 = 0, minimum: u64 = 0, len: u64 = 0 };
 
-    const d = chunk -% ascii;
-    const dl = d -% lead_ones;
+    fn compute() Table {
+        @setEvalBranchQuota(1_000_000);
+        const high = @backingInt(Half.high);
+        const low = @backingInt(Half.low);
 
-    const index = pextConst(d, index_mask);
-    const adjust = lutAdjust(adjust_table, index);
+        // One sample address per shape (1-3 digits per octet, 81 shapes), hashed by head and tail like the parser does:
+        // octets A.B go to the low half, C.D to the high half. The hash only tells digits from dots, so any digit works;
+        // the leading 0 mimics the cold path's 7-char tail.
+        // Result: two halves of 32 entries, null where no shape lands.
+        const entries = entries: {
+            var entries: [2][entries_per_half]?Entry = @splat(@splat(null));
 
-    const err = dl | (d +% adjust);
-    const compact = d *% 0x640A01;
+            const lengths = [_]u8{ 1, 2, 3 };
+            for (lengths) |a_digits| for (lengths) |b_digits| for (lengths) |c_digits| for (lengths) |d_digits| {
+                var chars: [16]u8 = @splat(0);
+                const ones = "111";
+                const address = std.fmt.bufPrint(chars[1..], "{s}.{s}.{s}.{s}", .{ ones[0..a_digits], ones[0..b_digits], ones[0..c_digits], ones[0..d_digits] }) catch unreachable;
 
-    return .{ .value = @intCast(pextConst(compact, value_mask)), .err = err & 0x8080808080808080 };
-}
+                const low_entry = lowEntry(a_digits, b_digits);
+                const high_entry = highEntry(c_digits, d_digits);
+                std.debug.assert(low_entry.len -% high_entry.len == 8 * address.len);
 
-fn leadingOnes(pdep_mask: u64, comptime h_lanes: [2]u6) u64 {
-    var ones: u64 = 0;
-    for (h_lanes) |h|
-        for (h..h + 2) |lane| if ((pdep_mask >> (8 * lane)) & 0xFF != 0) {
-            ones |= @as(u64, 1) << (8 * lane);
-            break;
+                set(&entries[low], hash(chars[1..][0..8].*, head_digit_bits), low_entry);
+                set(&entries[high], hash(chars[1 + address.len - 8 ..][0..8].*, tail_digit_bits), high_entry);
+            };
+
+            break :entries entries;
         };
 
-    return ones;
-}
+        // High goes first, low starts right where high's last entry ends, minus its own unused leading indices: those
+        // overlap high's entries, harmless since spare indices fail the length check.
+        // Result: each half's first slot.
+        const starts = starts: {
+            var high_end: usize = 0;
+            for (entries[high], 0..) |entry, index| if (entry != null) {
+                high_end = 4 * index + 4;
+            };
+            const low_first = for (entries[low], 0..) |entry, index| {
+                if (entry != null) break index;
+            } else unreachable;
 
-const lut_size = 64;
-const Entry = extern struct { pdep: u64, ascii: u64, lead_ones: u64, len: u64 };
-const Tables = extern struct { low: [lut_size]Entry, high: [lut_size]Entry, adjust_low: [lut_size]u64, adjust_high: [lut_size]u64 };
-
-const tables_flat: [@sizeOf(Tables) / 8]u64 align(64) = bt: {
-    @setEvalBranchQuota(10_000);
-
-    const adjust_lut_low = adjustTable(0x7F76767D7F76767D, 0);
-    const adjust_lut_high = adjustTable(0x76767D7F76767D7F, 1);
-
-    const lut_low = lutl: {
-        const every_lane = std.math.maxInt(u64);
-        var masks: [lut_size]u64 = @splat(every_lane);
-        var lanes: [lut_size]u64 = @splat(0);
-
-        // x.x
-        masks[5] = 0xFFFF0000FFFF0000;
-        masks[21] = 0xFFFF0000FFFF0000;
-        masks[37] = 0xFFFF0000FFFF0000;
-
-        // x.xx
-        masks[9] = 0xFFFFFF00FFFF0000;
-        masks[41] = 0xFFFFFF00FFFF0000;
-
-        // x.xxx
-        masks[17] = 0xFFFFFFFFFFFF0000;
-
-        // xx.x
-        masks[10] = 0xFFFF0000FFFFFF00;
-        masks[42] = 0xFFFF0000FFFFFF00;
-
-        // xx.xx
-        masks[18] = 0xFFFFFF00FFFFFF00;
-
-        // xx.xxx
-        masks[34] = 0xFFFFFFFFFFFFFF00;
-
-        // xxx.x
-        masks[20] = 0xFFFF0000FFFFFFFF;
-
-        // xxx.xx
-        masks[36] = 0xFFFFFF00FFFFFFFF;
-
-        // xxx.xxx
-        masks[4] = 0xFFFFFFFFFFFFFFFF;
-        lanes[4] = 9;
-
-        for (&masks, &lanes) |p, *l| l.* = if (p != every_lane) @popCount(p) / 8 + 1 else l.*;
-
-        // hash yields the inverted dot mask
-        var entries: [lut_size]Entry = undefined;
-        for (&entries, 0..) |*e, i| {
-            const m = masks[i ^ (lut_size - 1)];
-            const l = lanes[i ^ (lut_size - 1)];
-            e.* = .{ .pdep = m, .ascii = 0x2E3030302E303030 & m, .lead_ones = leadingOnes(m, .{ 0, 4 }), .len = if (l != 0) 8 * (l + 7) else 1 };
-        }
-        break :lutl entries;
-    };
-
-    const lut_high = luth: {
-        const every_lane = std.math.maxInt(u64);
-        var masks: [lut_size]u64 = @splat(every_lane);
-        var shift: [lut_size]u64 = @splat(4);
-
-        // x.x
-        masks[40] = 0xFF0000FFFF000000;
-        masks[41] = 0xFF0000FFFF000000;
-        masks[42] = 0xFF0000FFFF000000;
-
-        // x.xx
-        masks[20] = 0xFFFF00FFFF000000;
-        masks[21] = 0xFFFF00FFFF000000;
-
-        // x.xxx
-        masks[10] = 0xFFFFFFFFFF000000;
-
-        // xx.x
-        masks[36] = 0xFF0000FFFFFF0000;
-        masks[37] = 0xFF0000FFFFFF0000;
-
-        // xx.xx
-        masks[18] = 0xFFFF00FFFFFF0000;
-
-        // xx.xxx
-        masks[9] = 0xFFFFFFFFFFFF0000;
-
-        // xxx.x
-        masks[34] = 0xFF0000FFFFFFFF00;
-
-        // xxx.xx
-        masks[17] = 0xFFFF00FFFFFFFF00;
-
-        // xxx.xxx
-        masks[8] = 0xFFFFFFFFFFFFFF00;
-
-        for (&masks, &shift) |p, *s| if (p != every_lane) {
-            s.* = 64 - @popCount(p);
+            var starts: [2]usize = undefined;
+            starts[high] = 0;
+            starts[low] = high_end - 4 * low_first;
+            break :starts starts;
         };
 
-        var entries: [lut_size]Entry = undefined;
-        for (&entries, 0..) |*e, i| {
-            const m = masks[i ^ (lut_size - 1)];
-            const s = shift[i ^ (lut_size - 1)];
-            e.* = .{ .pdep = m, .ascii = 0x3030302E3030302E & m, .lead_ones = leadingOnes(m, .{ 1, 5 }), .len = s };
-        }
-        break :luth entries;
-    };
+        // Each entry becomes four u64s at its half's start + quadrupled index, followed by the adjust tables. The 3 extra
+        // slots are for an unaligned index (non-ASCII first char), which reads up to 3 u64s past the last entry.
+        // Result: the final table.
+        const adjust_start = starts[low] + 4 * entries_per_half + 3;
+        var adjust_starts: [2]usize = undefined;
+        adjust_starts[high] = adjust_start;
+        adjust_starts[low] = adjust_start + 64;
 
-    var t: [@sizeOf(Tables) / 8]u64 = undefined;
-    const fields: [4][]const u64 = .{ @ptrCast(&lut_low), @ptrCast(&lut_high), &adjust_lut_low, &adjust_lut_high };
-    var at: usize = 0;
-    for (fields) |f| {
-        @memcpy(t[at..][0..f.len], f);
-        at += f.len;
+        const slot_count = adjust_start + 2 * 64;
+        const slots: [slot_count]u64 align(64) = slots: {
+            // read as either half's len, 4 can't pass the length check
+            var slots: [slot_count]u64 = @splat(4);
+            for (entries, starts) |array, start| for (array, 0..) |entry, index| {
+                if (entry) |value| slots[start + 4 * index ..][0..4].* = .{ value.lanes, value.ascii, value.minimum, value.len };
+            };
+            slots[adjust_starts[high]..][0..64].* = adjustTable(1);
+            slots[adjust_starts[low]..][0..64].* = adjustTable(0);
+
+            break :slots slots;
+        };
+
+        // Any pair of reads the parser can make, unaligned and spare indices included, must fail the length check unless
+        // both are real entries, or leftover bytes could accept an invalid address.
+        // Result: a compile error if one slips.
+        const result: Table = .{ .starts = starts, .adjust_starts = adjust_starts, .slots = &slots };
+        for (0..4 * entries_per_half) |index_low| for (0..4 * entries_per_half) |index_high| {
+            const difference = result.get(.low, index_low).len -% result.get(.high, index_high).len;
+            const both_entries = index_low % 4 == 0 and entries[low][index_low / 4] != null and
+                index_high % 4 == 0 and entries[high][index_high / 4] != null;
+            if (difference % 8 == 0 and difference / 8 >= 7 and difference / 8 <= 15) std.debug.assert(both_entries);
+        };
+
+        return result;
     }
-    break :bt t;
+
+    fn placeLane(entry: *Entry, lane: u8, char: u8) void {
+        const shift: u6 = @intCast(8 * lane);
+        entry.lanes |= @as(u64, 0xFF) << shift;
+        entry.ascii |= @as(u64, char) << shift;
+        entry.minimum |= @as(u64, char) << shift;
+    }
+
+    fn placeOctet(entry: *Entry, hundreds_lane: u8, digits: u8) void {
+        const first = hundreds_lane + 3 - digits;
+        for (first..hundreds_lane + 3) |lane| placeLane(entry, @intCast(lane), '0');
+        if (digits > 1) entry.minimum += @as(u64, 1) << @intCast(8 * first);
+    }
+
+    // the difference of the two lens is 8 * address.len
+    fn lowEntry(a_digits: u8, b_digits: u8) Entry {
+        var entry: Entry = .{};
+        placeOctet(&entry, 0, a_digits);
+        placeLane(&entry, 3, '.');
+        placeOctet(&entry, 4, b_digits);
+        placeLane(&entry, 7, '.');
+        entry.len = 64 + 8 * (a_digits + 1 + b_digits + 1);
+        return entry;
+    }
+
+    // the tail is shifted right by len, so it starts at C and the dot before C is gone
+    fn highEntry(c_digits: u8, d_digits: u8) Entry {
+        var entry: Entry = .{};
+        placeOctet(&entry, 1, c_digits);
+        placeLane(&entry, 4, '.');
+        placeOctet(&entry, 5, d_digits);
+        entry.len = 64 - 8 * (c_digits + 1 + d_digits);
+        return entry;
+    }
+
+    // a hundreds of 2 caps the tens at 5, and a 25 caps the ones at 5
+    fn adjustTable(hundreds_lane: u8) [64]u64 {
+        var limits: u64 = 0;
+        for (0..8) |lane| {
+            const maximum: u8 = if (lane % 4 == (hundreds_lane + 3) % 4) 0 else if (lane % 4 == hundreds_lane) 2 else 9;
+            limits |= @as(u64, 0x80 - (maximum + 1)) << @intCast(8 * lane);
+        }
+
+        var adjust: [64]u64 = undefined;
+        for (&adjust, 0..) |*value, index| {
+            value.* = limits;
+            for (0..2) |octet| {
+                const bits = index >> @intCast(3 * octet);
+                const tens = 8 * (4 * octet + hundreds_lane + 1);
+                if (bits & 1 != 0) value.* += @as(u64, 4) << @intCast(tens);
+                if (bits & 7 == 7) value.* += @as(u64, 4) << @intCast(tens + 8);
+            }
+        }
+        return adjust;
+    }
+
+    fn set(entries: *[entries_per_half]?Entry, quadrupled_index: usize, entry: Entry) void {
+        std.debug.assert(quadrupled_index % 4 == 0);
+
+        const slot = &entries[quadrupled_index / 4];
+        if (slot.*) |existing| std.debug.assert(std.meta.eql(existing, entry));
+        slot.* = entry;
+    }
+
+    fn hash(chars: [8]u8, mask: u64) usize {
+        const word: u64 = @bitCast(chars);
+        var index: usize = 0;
+        var bit: u6 = 0;
+        var remaining = mask;
+        while (remaining != 0) : (remaining &= remaining - 1) {
+            if (word & remaining & -%remaining != 0) index |= 1 << bit;
+            bit += 1;
+        }
+        return index;
+    }
+
+    pub inline fn get(this: *const Table, comptime half: Half, quadrupled_index: usize) Entry {
+        return @as(*const Entry, @ptrCast(&this.slots[this.starts[@backingInt(half)] + quadrupled_index])).*;
+    }
+
+    pub inline fn getAdjust(this: *const Table, comptime half: Half, index: usize) u64 {
+        return this.slots[this.adjust_starts[@backingInt(half)] + index];
+    }
 };
 
-inline fn lutAdjust(comptime field: std.meta.FieldEnum(Tables), index: usize) u64 {
-    return tables_flat[@offsetOf(Tables, @tagName(field)) / 8 + index];
-}
+const table: Table = .compute();
 
-const tables: *const Tables = @ptrCast(&tables_flat);
+inline fn parseOctets(comptime half: Table.Half, input: u64, entry: Table.Entry) struct { octets: u32, bad: u64 } {
+    const adjust_bits, const ones_lanes = switch (half) {
+        .low => .{ 0x0000050200000502, 0x00FF000000FF0000 },
+        .high => .{ 0x0005020000050200, 0xFF000000FF000000 },
+    };
 
-inline fn hash(data: u64) usize {
-    return @intCast(pextConst(data, 0x0010101010101000));
+    const chars = pdep(input, entry.lanes);
+    const digits = chars -% entry.ascii;
+    const under_minimum = chars -% entry.minimum;
+    const over_maximum = digits +% table.getAdjust(half, pext(digits, adjust_bits));
+
+    const sums = digits *% 0x640A01;
+    return .{ .octets = @intCast(pext(sums, ones_lanes)), .bad = (under_minimum | over_maximum) & 0x8080808080808080 };
 }
 
 pub inline fn bmiParseIPV4(address: []const u8) !u32 {
-    var head: u64 = undefined;
-    var tail: u64 = undefined;
-
-    if (address.len < 8) {
+    const tail_offset = address.len -% 8;
+    const head: u64, const tail: u64 = if (tail_offset > 7) cold: {
         @branchHint(.cold);
         if (address.len != 7) return error.Invalid;
-        head = 0;
-        @memcpy(std.mem.asBytes(&head)[0..7], address[0..7]);
-        tail = head << 8;
-    } else {
-        @memcpy(std.mem.asBytes(&head), address[0..8]);
-        @memcpy(std.mem.asBytes(&tail), (address.ptr + address.len - 8)[0..8]);
+
+        var padded: u64 = 0;
+        @memcpy(std.mem.asBytes(&padded)[0..7], address[0..7]);
+
+        break :cold .{ padded, padded << 8 };
+    } else .{
+        std.mem.readInt(u64, address[0..8], .little),
+        std.mem.readInt(u64, (address.ptr + tail_offset)[0..8], .little),
+    };
+
+    const index_low: usize = pext(head, Table.head_digit_bits);
+    const index_high: usize = pext(tail, Table.tail_digit_bits);
+
+    const low = table.get(.low, index_low);
+    const high = table.get(.high, index_high);
+
+    const parsed_low = parseOctets(.low, head, low);
+    const parsed_high = parseOctets(.high, tail >> @truncate(high.len), high);
+
+    const bad_len = low.len -% (high.len +% (address.len << 3));
+    if ((bad_len | parsed_low.bad | parsed_high.bad) != 0) {
+        @branchHint(.cold);
+        return error.Invalid;
     }
 
-    const el = &tables.low[hash(head)];
-    const low = parseTwoTriplets(.low, pdep(head, el.pdep), el.ascii, el.lead_ones);
-
-    const eh = &tables.high[hash(tail)];
-    const high = parseTwoTriplets(.high, pdep(tail >> @truncate(eh.len), eh.pdep), eh.ascii, eh.lead_ones);
-
-    const bad_len = (el.len -% eh.len) ^ (address.len << 3);
-    if ((bad_len | low.err | high.err) != 0) return error.Invalid;
-
-    return high.value << 16 | low.value;
+    return parsed_high.octets << 16 | parsed_low.octets;
 }

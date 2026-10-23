@@ -362,4 +362,38 @@ This also kinda shows how much a random challenge can teach you. If I hadn't set
 
 Now if you'll excuse me, I have some cake to eat.
 
+## Update: the cake went on a diet
+
+A few days after this post went out, Mahdi Bahrami published [**A very fast IPv4 parser in Swift**](https://blog.mahdibm.com/posts/a-very-fast-ipv4-parser-in-swift/), where he builds swift-endpoint, a fast parser that runs anywhere, and races it against both parsers from this post among others (and has some very kind words for them, thanks Mahdi!). It's well worth a read, and one part I particularly liked is the **Which One Do I Choose Now?** section at the end. Instead of just crowning a winner, it walks you through picking a parser for your situation: how many addresses you parse, whether the lookup tables will still be in cache, whether you're tied to a single architecture. That's pretty much the selection tree I argued for at the end of my first post.
+
+It also pushed me to go back to both parsers, mostly to fix the downside I admitted above: the lookup tables. To be honest, part of that size never really hurt: plenty of entries sit at indices no valid address can hash to, so they never got pulled into the cache in the first place. Still, a table bigger than simdzone's kept bugging me. The snippets above still show the original code; the link at the bottom has the new one.
+
+The hybrid's table went from 2176 to 856 bytes, so it's now smaller than simdzone's 1552:
+
+- **5-bit hashes**: we don't need every character to know where the dots are. Skip one more per half (char 2 of `head`, char 5 of `tail`) and the 9 shapes still land on different indices, so each half needs 32 entries instead of 64.
+- **Packed lengths**: this one actually helps twice. Byte 7 of each `pattern` now also holds that half's share of the length. In the low half it's the lane of the dot after `b`: adding `0x10` to its index doesn't change anything for `pshufb`, since it ignores those bits. In the high half it would be the dot after `d`, which doesn't exist, so we store a negative number there and `pshufb` writes the `0` we wanted anyway. The separate length arrays are gone, and since the length check now rejects any read that doesn't land on a real entry, the two halves can overlap, and whatever ends up in the unused slots doesn't matter.
+- **16-byte entries**: `pattern` and `sub` now sit next to each other, and the `pext` mask also grabs bit 7 of the first character, which is always `0` for ASCII, so the index comes out already doubled, ready for 16-byte entries without a shift. Anything else gives an odd index, which reads half of one entry and half of the next, and that mix fails the length check, just like we'd want for an address that isn't even ASCII.
+
+And one more instruction fell off: `limit = 9 -| sub` became `sub ^ flips`. On digit lanes `sub` is `0` or `1`, and `9 ^ 0 = 9`, `9 ^ 1 = 8`, same as before, while the dots always land in lanes 9, 11 and 13, so flipping those with `0xFE` gives the `0` they need. A XOR with a constant reads it straight from memory, while the old version first had to fill a register with 9s for the saturating subtraction.
+
+The BMI-only parser got the same diet: 5-bit hashes (bits 6 and 7 of the first character make its index come out already multiplied by 4, ready for its 32-byte entries) and overlapping halves took its table from 5120 to 2744 bytes, and a few instructions fell off along the way. Remember the tie with simdzone? Not anymore :P
+
+Oh, and after watching a pure refactor make the hybrid 0.2 ns slower just because it moved 16 bytes (hello, JCC erratum), the benchmark now aligns every parser's entry point to 128 bytes, so the numbers stop dancing with code placement:
+
+```
+❯ taskset -c 3 zig build benchmark
+info: Parsing 1500000 random IPs 64 times (1274.88MB)
+info: bmi (len given)            4.35 ns/ip   3.05 GB/s
+info: simdzone (overreads)       4.76 ns/ip   2.79 GB/s
+info: hybrid (len given)         3.30 ns/ip   4.03 GB/s
+info: --- no length, no overread ---
+info: hybrid + strlen            5.64 ns/ip   2.35 GB/s
+info: simdzone + memcpy         16.34 ns/ip   0.81 GB/s
+info: simdzone + strlen, regs    8.83 ns/ip   1.50 GB/s
+```
+
+That's the hybrid going from 3.48 to 3.30 ns and the BMI-only parser from 4.77 to 4.35, with simdzone staying put, all with smaller tables.
+
+Speaking of picking the right parser for the job, ours have a few knobs of their own. Mahdi's `real32` benchmark parses 32 popular addresses in random order, and quite a few of them are just 7 characters, like `1.1.1.1` and `8.8.8.8`. Those go through our cold branch, which keeps getting mispredicted, so on his Zen 5 the hybrid comes second, behind simdzone. If you can afford to read one byte before the address and one past its end, that branch can go, and 7-character addresses become as fast as any other. Say you're parsing the host out of a null-terminated URL string: there's always a `/` right before it and at least the NUL right after, so this works out great!
+
 [Link To The Code]($link.url("https://github.com/GiuseppeCesarano/extractingcycles/tree/master/content/blog/ipv4-parsing-having-your-cake-and-eating-it-too").new(true))

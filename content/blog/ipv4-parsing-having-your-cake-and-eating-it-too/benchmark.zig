@@ -13,19 +13,20 @@ extern fn bench_simdzone_regs(src: [*:0]const u8, len: usize, out: *u32) callcon
 extern var strlen_ptr: ?*const fn ([*:0]const u8) callconv(.c) usize;
 extern var memcpy_ptr: ?*const fn ([*]u8, [*]const u8, usize) callconv(.c) [*]u8;
 
-fn bmi(src: [*:0]const u8, len: usize, out: *u32) callconv(.c) bool {
+// pinned, so code placement can't shift one parser's numbers
+fn bmi(src: [*:0]const u8, len: usize, out: *u32) align(128) callconv(.c) bool {
     out.* = bmiParseIPV4(src[0..len]) catch return false;
     return true;
 }
 
-fn hybrid(src: [*:0]const u8, len: usize, out: *u32) callconv(.c) bool {
+fn hybrid(src: [*:0]const u8, len: usize, out: *u32) align(128) callconv(.c) bool {
     out.* = hybridParseIPV4(src[0..len]) catch return false;
     return true;
 }
 
 // From here on the length is ignored: no length, no overread.
 
-fn hybridStrlen(src: [*:0]const u8, _: usize, out: *u32) callconv(.c) bool {
+fn hybridStrlen(src: [*:0]const u8, _: usize, out: *u32) align(128) callconv(.c) bool {
     out.* = hybridParseIPV4(src[0..strlen_ptr.?(src)]) catch return false;
     return true;
 }
