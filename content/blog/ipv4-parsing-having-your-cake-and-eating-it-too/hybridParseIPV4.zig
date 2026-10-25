@@ -1,23 +1,36 @@
 const std = @import("std");
+const simd = std.simd;
 
+const U32x4 = @Vector(4, u32);
 const U8x16 = @Vector(16, u8);
 const I8x16 = @Vector(16, i8);
 const U16x8 = @Vector(8, u16);
-const U32x4 = @Vector(4, u32);
-const U64x2 = @Vector(2, u64);
+const U8x8 = @Vector(8, u8);
+const U8x4 = @Vector(4, u8);
 
-extern fn @"llvm.x86.ssse3.pshuf.b.128"(U8x16, U8x16) U8x16;
-extern fn @"llvm.x86.ssse3.pmadd.ub.sw.128"(U8x16, I8x16) U16x8;
-extern fn @"llvm.x86.sse2.packuswb.128"(U16x8, U16x8) U8x16;
-extern fn @"llvm.x86.sse41.ptestz"(U64x2, U64x2) i32;
+inline fn pshufb(source: U8x16, pattern: U8x16) U8x16 {
+    return asm ("vpshufb %[pattern], %[source], %[ret]"
+        : [ret] "=x" (-> U8x16),
+        : [source] "x" (source),
+          [pattern] "x" (pattern),
+    );
+}
 
-const pshufb = @"llvm.x86.ssse3.pshuf.b.128";
-const pmaddubsw = @"llvm.x86.ssse3.pmadd.ub.sw.128";
-const packuswb = @"llvm.x86.sse2.packuswb.128";
-const ptestz = @"llvm.x86.sse41.ptestz";
+inline fn weightedPairSums(bytes: U8x16, comptime weights: I8x16) U16x8 {
+    var upper_half: U16x8 = undefined;
+    return asm (
+        \\vpmaddubsw %[weights:P](%%rip), %[bytes], %[sums]
+        \\vpshufd $0xee, %[sums], %[upper_half]
+        \\vpaddw %[sums], %[upper_half], %[sums]
+        : [sums] "=x" (-> U16x8),
+          [upper_half] "=x" (upper_half),
+        : [bytes] "x" (bytes),
+          [weights] "i" (&weights),
+    );
+}
 
 inline fn anyNonZero(vector: U8x16) bool {
-    return ptestz(@bitCast(vector), @splat(std.math.maxInt(u64))) == 0;
+    return @reduce(.Or, vector != @as(U8x16, @splat(0)));
 }
 
 inline fn pext(input: u64, comptime mask: u64) u64 {
@@ -28,11 +41,12 @@ inline fn pext(input: u64, comptime mask: u64) u64 {
     );
 }
 
-inline fn loadq(pointer: [*]const u8) U8x16 {
-    return asm ("vmovq (%[pointer]), %[ret]"
+inline fn loadq(pointer: [*]const u8) U8x8 {
+    const loaded = asm ("vmovq (%[pointer]), %[ret]"
         : [ret] "=x" (-> U8x16),
         : [pointer] "r" (pointer),
     );
+    return simd.extract(loaded, 0, 8);
 }
 
 inline fn broadcastAt(pointer: [*]const u8, offset: usize) U8x16 {
@@ -129,7 +143,7 @@ const Table = struct {
         // Result: a compile error if one slips.
         const result: Table = .{ .starts = starts, .slots = &slots };
         for (0..2 * entries_per_half) |index_low| for (0..2 * entries_per_half) |index_high| {
-            const sum = lengthSum(result.get(.low, index_low)[7], result.get(.high, index_high)[7]);
+            const sum = result.getLength(.low, index_low) +% result.getLength(.high, index_high);
             const both_entries = index_low % 2 == 0 and entries[low][index_low / 2] != null and
                 index_high % 2 == 0 and entries[high][index_high / 2] != null;
             if (sum >= 7 and sum <= 15) std.debug.assert(both_entries);
@@ -194,11 +208,16 @@ const Table = struct {
         return @as(i32, low) + @as(i8, @bitCast(high));
     }
 
-    pub inline fn get(this: *const Table, comptime half: Half, doubled_index: usize) U8x16 {
-        return @as(*const [16]u8, @ptrCast(&this.slots[this.starts[@backingInt(half)] + doubled_index])).*;
+    pub inline fn get(this: *const Table, comptime half: Half, doubled_index: usize) U32x4 {
+        return @as(*align(1) const U32x4, @ptrCast(&this.slots[this.starts[@backingInt(half)] + doubled_index])).*;
     }
 
     pub inline fn getLength(this: *const Table, comptime half: Half, doubled_index: usize) u64 {
+        if (@inComptime()) {
+            const share = this.slots[this.starts[@backingInt(half)] + doubled_index][7];
+            return if (half == .low) share else @bitCast(@as(i64, @as(i8, @bitCast(share))));
+        }
+
         const extend = if (half == .low) "movzbq" else "movsbq";
         return asm (std.fmt.comptimePrint("{s} {d}(%[base],%[index],8), %[ret]", .{ extend, 8 * this.starts[@backingInt(half)] + 7 })
             : [ret] "=r" (-> u64),
@@ -212,50 +231,45 @@ const table: Table = .compute();
 
 pub inline fn hybridParseIPV4(address: []const u8) !u32 {
     const tail_offset = address.len -% 8;
-    const head: u64, const tail: u64, const head_tail: U8x16 = if (tail_offset > 7) cold: {
-        @branchHint(.cold);
-        if (address.len != 7) return error.Invalid;
-
-        var padded: u64 = 0;
-        @memcpy(std.mem.asBytes(&padded)[0..7], address[0..7]);
-
-        break :cold .{ padded, padded << 8, @bitCast([2]u64{ padded, padded << 8 }) };
-    } else .{
+    const head, const tail, const head_tail = if (tail_offset > 7) try sevenChars(address) else .{
         std.mem.readInt(u64, address[0..8], .little),
         std.mem.readInt(u64, (address.ptr + tail_offset)[0..8], .little),
-        @shuffle(u8, loadq(address.ptr), broadcastAt(address.ptr, tail_offset), [16]i32{ 0, 1, 2, 3, 4, 5, 6, 7, -9, -10, -11, -12, -13, -14, -15, -16 }),
+        simd.join(loadq(address.ptr), simd.extract(broadcastAt(address.ptr, tail_offset), 8, 8)),
     };
 
-    const index_low: usize = pext(head, Table.head_digit_bits);
-    const index_high: usize = pext(tail, Table.tail_digit_bits);
+    const index_low = pext(head, Table.head_digit_bits);
+    const index_high = pext(tail, Table.tail_digit_bits);
 
-    const low = table.get(.low, index_low);
-    const high = table.get(.high, index_high);
+    if (address.len -% table.getLength(.low, index_low) != table.getLength(.high, index_high)) return error.Invalid;
 
-    const pattern = @shuffle(u8, low, high, [16]i32{ 0, 1, 2, 3, -1, -2, -3, -4, 4, 5, 6, 7, -5, -6, -7, -8 });
-    const sub = @shuffle(u8, low, high, [16]i32{ 8, 9, 10, 11, -9, -10, -11, -12, 12, 13, 14, 15, -13, -14, -15, -16 });
+    // U32x4 so the next interlace is done on 4bytes and not per single byte.
+    const low: U32x4 = table.get(.low, index_low);
+    const high: U32x4 = table.get(.high, index_high);
 
-    const flips: U8x16 = .{ 9, 9, 9, 9, 9, 9, 9, 9, 9, 0xFE, 9, 0xFE, 9, 0xFE, 9, 9 };
-    const limit = sub ^ flips;
-
+    const pattern: U8x16 = @bitCast(simd.interlace(.{ simd.extract(low, 0, 2), simd.extract(high, 0, 2) }));
     const lanes = pshufb(head_tail -% @as(U8x16, @splat('0')), pattern);
-    const bad_lanes = (lanes -% sub) -| limit;
-
-    const positional_values: I8x16 = .{ 10, 1, 10, 1, 10, 1, 10, 1, 100, 0, 100, 0, 100, 0, 100, 0 };
-    const products = pmaddubsw(lanes, positional_values);
-    const hundreds = @shuffle(u16, products, undefined, [8]i32{ 4, 5, 6, 7, undefined, undefined, undefined, undefined });
-    const sums = products +% hundreds;
+    const sums: U16x8 = weightedPairSums(lanes, .{ 10, 1, 10, 1, 10, 1, 10, 1, 100, 0, 100, 0, 100, 0, 100, 0 });
 
     const high_bytes: U16x8 = .{ 0xFF00, 0xFF00, 0xFF00, 0xFF00, 0, 0, 0, 0 };
     const too_big: U8x16 = @bitCast(sums & high_bytes);
 
-    if (address.len -% table.getLength(.low, index_low) != table.getLength(.high, index_high) or
-        anyNonZero(bad_lanes | too_big))
-    {
-        @branchHint(.cold);
+    const sub: U8x16 = @bitCast(simd.interlace(.{ simd.extract(low, 2, 2), simd.extract(high, 2, 2) }));
+    const flips: U8x16 = .{ 9, 9, 9, 9, 9, 9, 9, 9, 9, 0xFE, 9, 0xFE, 9, 0xFE, 9, 9 };
+    const bad_lanes = (lanes -% sub) -| (sub ^ flips);
+
+    if (anyNonZero(too_big | bad_lanes)) {
+        @branchHint(.unlikely);
         return error.Invalid;
     }
 
-    const octets: U32x4 = @bitCast(packuswb(sums, undefined));
-    return octets[0];
+    const octets: U8x4 = @intCast(simd.extract(sums, 0, 4));
+    return @bitCast(octets);
+}
+
+inline fn sevenChars(address: []const u8) !struct { u64, u64, U8x16 } {
+    if (address.len != 7) return error.Invalid;
+
+    var head: u64 = 0;
+    @memcpy(std.mem.asBytes(&head)[0..7], address[0..7]);
+    return .{ head, head << 8, @bitCast([2]u64{ head, head << 8 }) };
 }

@@ -1,8 +1,5 @@
 const std = @import("std");
 
-extern fn @"llvm.x86.bmi.pdep.64"(u64, u64) u64;
-const pdep = @"llvm.x86.bmi.pdep.64";
-
 inline fn pext(input: u64, comptime mask: u64) u64 {
     return asm ("pextq %[mask:P](%%rip), %[src], %[dst]"
         : [dst] "=r" (-> u64),
@@ -196,17 +193,26 @@ const Table = struct {
     pub inline fn getAdjust(this: *const Table, comptime half: Half, index: usize) u64 {
         return this.slots[this.adjust_starts[@backingInt(half)] + index];
     }
+
+    pub inline fn deposit(this: *const Table, comptime half: Half, quadrupled_index: usize, input: u64) u64 {
+        return asm (std.fmt.comptimePrint("pdepq {d}(%[base],%[index],8), %[input], %[ret]", .{8 * this.starts[@backingInt(half)]})
+            : [ret] "=r" (-> u64),
+            : [base] "r" (this.slots.ptr),
+              [index] "r" (quadrupled_index),
+              [input] "r" (input),
+        );
+    }
 };
 
 const table: Table = .compute();
 
-inline fn parseOctets(comptime half: Table.Half, input: u64, entry: Table.Entry) struct { octets: u32, bad: u64 } {
+inline fn parseOctets(comptime half: Table.Half, index: usize, entry: Table.Entry, input: u64) struct { octets: u32, bad: u64 } {
     const adjust_bits, const ones_lanes = switch (half) {
         .low => .{ 0x0000050200000502, 0x00FF000000FF0000 },
         .high => .{ 0x0005020000050200, 0xFF000000FF000000 },
     };
 
-    const chars = pdep(input, entry.lanes);
+    const chars = table.deposit(half, index, input);
     const digits = chars -% entry.ascii;
     const under_minimum = chars -% entry.minimum;
     const over_maximum = digits +% table.getAdjust(half, pext(digits, adjust_bits));
@@ -217,27 +223,19 @@ inline fn parseOctets(comptime half: Table.Half, input: u64, entry: Table.Entry)
 
 pub inline fn bmiParseIPV4(address: []const u8) !u32 {
     const tail_offset = address.len -% 8;
-    const head: u64, const tail: u64 = if (tail_offset > 7) cold: {
-        @branchHint(.cold);
-        if (address.len != 7) return error.Invalid;
-
-        var padded: u64 = 0;
-        @memcpy(std.mem.asBytes(&padded)[0..7], address[0..7]);
-
-        break :cold .{ padded, padded << 8 };
-    } else .{
+    const head, const tail = if (tail_offset > 7) try sevenChars(address) else .{
         std.mem.readInt(u64, address[0..8], .little),
         std.mem.readInt(u64, (address.ptr + tail_offset)[0..8], .little),
     };
 
-    const index_low: usize = pext(head, Table.head_digit_bits);
-    const index_high: usize = pext(tail, Table.tail_digit_bits);
+    const index_low = pext(head, Table.head_digit_bits);
+    const index_high = pext(tail, Table.tail_digit_bits);
 
     const low = table.get(.low, index_low);
     const high = table.get(.high, index_high);
 
-    const parsed_low = parseOctets(.low, head, low);
-    const parsed_high = parseOctets(.high, tail >> @truncate(high.len), high);
+    const parsed_low = parseOctets(.low, index_low, low, head);
+    const parsed_high = parseOctets(.high, index_high, high, tail >> @truncate(high.len));
 
     const bad_len = low.len -% (high.len +% (address.len << 3));
     if ((bad_len | parsed_low.bad | parsed_high.bad) != 0) {
@@ -246,4 +244,12 @@ pub inline fn bmiParseIPV4(address: []const u8) !u32 {
     }
 
     return parsed_high.octets << 16 | parsed_low.octets;
+}
+
+inline fn sevenChars(address: []const u8) !struct { u64, u64 } {
+    if (address.len != 7) return error.Invalid;
+
+    var head: u64 = 0;
+    @memcpy(std.mem.asBytes(&head)[0..7], address[0..7]);
+    return .{ head, head << 8 };
 }
